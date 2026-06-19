@@ -1,0 +1,237 @@
+[
+  {
+    "device_id": "PRECISION-TEST-001 (Fully Compliant)",
+    "compliance_score": 100,
+    "is_compliant": true,
+    "findings": []
+  },
+  {
+    "device_id": "PRECISION-TEST-002 (Version Mismatch - Low Drivers)",
+    "compliance_score": 0,
+    "is_compliant": false,
+    "findings": [
+      {
+        "rule_type": "REQUIRES",
+        "severity": "CRITICAL",
+        "source": "Windows 11 25H2",
+        "target": "Dell Command Update",
+        "message": "Windows 11 25H2 requires Dell Command Update == 4.13, but the installed value is 4.12.",
+        "remediation": {
+          "component": "Dell Command Update",
+          "action": "upgrade",
+          "target_version": "4.13",
+          "reason": "Required to resolve a core system dependency validation failure."
+        }
+      },
+      {
+        "rule_type": "WARNS_AGAINST",
+        "severity": "WARNING",
+        "source": "Windows 11 25H2",
+        "target": "Intel Chipset Driver",
+        "message": "Windows 11 25H2 warns against using Intel Chipset Driver (Rule constraint: < 8.0, Machine value: 7.0).",
+        "remediation": {
+          "component": "Intel Chipset Driver",
+          "action": "avoid or replace",
+          "target_version": null,
+          "reason": "Recommended to mitigate potential stability or performance warnings."
+        }
+      },
+      {
+        "rule_type": "REQUIRES",
+        "severity": "CRITICAL",
+        "source": "BIOS 3.0.0",
+        "target": "Intel Chipset Driver",
+        "message": "BIOS 3.0.0 requires Intel Chipset Driver >= 8.0, but the installed value is 7.0.",
+        "remediation": {
+          "component": "Intel Chipset Driver",
+          "action": "upgrade",
+          "target_version": "8.0",
+          "reason": "Required to resolve a core system dependency validation failure."
+        }
+      },
+      {
+        "rule_type": "REQUIRES",
+        "severity": "CRITICAL",
+        "source": "BIOS 3.0.0",
+        "target": "Dell Command Update",
+        "message": "BIOS 3.0.0 requires Dell Command Update >= 4.13, but the installed value is 4.12.",
+        "remediation": {
+          "component": "Dell Command Update",
+          "action": "upgrade",
+          "target_version": "4.13",
+          "reason": "Required to resolve a core system dependency validation failure."
+        }
+      },
+      {
+        "rule_type": "REQUIRES",
+        "severity": "CRITICAL",
+        "source": "BIOS 3.0.0",
+        "target": "Intel Graphics Driver",
+        "message": "BIOS 3.0.0 requires Intel Graphics Driver, but it is not installed.",
+        "remediation": {
+          "component": "Intel Graphics Driver",
+          "action": "install",
+          "target_version": "32.0.101.5000",
+          "reason": "Required to resolve a core system dependency validation failure."
+        }
+      },
+      {
+        "rule_type": "COMPATIBLE_WITH",
+        "severity": "WARNING",
+        "source": "Intel Chipset Driver",
+        "target": "BIOS 3.0.0",
+        "message": "BIOS 3.0.0 is not fully compatible with Intel Chipset Driver configuration paths.",
+        "remediation": {
+          "component": "Intel Chipset Driver",
+          "action": "review",
+          "target_version": "8.0",
+          "reason": "Manual configuration review recommended against current inventory context."
+        }
+      }
+    ]
+  },
+  {
+    "device_id": "PRECISION-TEST-003 (Conflict Detected)",
+    "compliance_score": 0,
+    "is_compliant": false,
+    "findings": [
+      {
+        "rule_type": "REQUIRES",
+        "severity": "CRITICAL",
+        "source": "Windows 11 25H2",
+        "target": "Dell Command Update",
+        "message": "Dell Command Update requires Windows 11 25H2 == 4.13, but the installed value is 25H2.",
+        "remediation": {
+          "component": "Windows 11 25H2",
+          "action": "upgrade",
+          "target_version": "4.13",
+          "reason": "Required to resolve a core system dependency validation failure."
+        }
+      },
+      {
+        "rule_type": "REQUIRES",
+        "severity": "CRITICAL",
+        "source": "BIOS 3.0.0",
+        "target": "Intel Chipset Driver",
+        "message": "BIOS 3.0.0 requires Intel Chipset Driver, but it is not installed.",
+        "remediation": {
+          "component": "Intel Chipset Driver",
+          "action": "install",
+          "target_version": "8.0",
+          "reason": "Required to resolve a core system dependency validation failure."
+        }
+      },
+      {
+        "rule_type": "REQUIRES",
+        "severity": "CRITICAL",
+        "source": "BIOS 3.0.0",
+        "target": "Dell Command Update",
+        "message": "BIOS 3.0.0 requires Dell Command Update, but it is not installed.",
+        "remediation": {
+          "component": "Dell Command Update",
+          "action": "install",
+          "target_version": "4.13",
+          "reason": "Required to resolve a core system dependency validation failure."
+        }
+      },
+      {
+        "rule_type": "REQUIRES",
+        "severity": "CRITICAL",
+        "source": "BIOS 3.0.0",
+        "target": "Intel Graphics Driver",
+        "message": "BIOS 3.0.0 requires Intel Graphics Driver, but it is not installed.",
+        "remediation": {
+          "component": "Intel Graphics Driver",
+          "action": "install",
+          "target_version": "32.0.101.5000",
+          "reason": "Required to resolve a core system dependency validation failure."
+        }
+      },
+      {
+        "rule_type": "CONFLICTS_WITH",
+        "severity": "CRITICAL",
+        "source": "BIOS 3.0.0",
+        "target": "NVIDIA Graphics Driver",
+        "message": "BIOS 3.0.0 conflicts with NVIDIA Graphics Driver (Rule constraint: < 32.0.0, Machine value: 31.0.0).",
+        "remediation": {
+          "component": "NVIDIA Graphics Driver",
+          "action": "remove or replace",
+          "target_version": null,
+          "reason": "Required to resolve an active architectural conflict declaration."
+        }
+      },
+      {
+        "rule_type": "RECOMMENDS",
+        "severity": "INFO",
+        "source": "NVIDIA Graphics Driver",
+        "target": "Dell Precision 7780",
+        "message": "Dell Precision 7780 recommends NVIDIA Graphics Driver, but structural recommendations are unmet.",
+        "remediation": {
+          "component": "NVIDIA Graphics Driver",
+          "action": "upgrade",
+          "target_version": "32.0.15.5000",
+          "reason": "Recommended upgrade track to align with structural support matrices."
+        }
+      }
+    ]
+  },
+  {
+    "device_id": "PRECISION-TEST-004 (OS Incompatibility)",
+    "compliance_score": 0,
+    "is_compliant": false,
+    "findings": [
+      {
+        "rule_type": "CONFLICTS_WITH",
+        "severity": "CRITICAL",
+        "source": "Windows 10 22H2",
+        "target": "BIOS 3.0.0",
+        "message": "Windows 10 22H2 conflicts with BIOS 3.0.0.",
+        "remediation": {
+          "component": "BIOS 3.0.0",
+          "action": "remove or replace",
+          "target_version": null,
+          "reason": "Required to resolve an active architectural conflict declaration."
+        }
+      },
+      {
+        "rule_type": "REQUIRES",
+        "severity": "CRITICAL",
+        "source": "BIOS 3.0.0",
+        "target": "Intel Chipset Driver",
+        "message": "BIOS 3.0.0 requires Intel Chipset Driver, but it is not installed.",
+        "remediation": {
+          "component": "Intel Chipset Driver",
+          "action": "install",
+          "target_version": "8.0",
+          "reason": "Required to resolve a core system dependency validation failure."
+        }
+      },
+      {
+        "rule_type": "REQUIRES",
+        "severity": "CRITICAL",
+        "source": "BIOS 3.0.0",
+        "target": "Dell Command Update",
+        "message": "BIOS 3.0.0 requires Dell Command Update, but it is not installed.",
+        "remediation": {
+          "component": "Dell Command Update",
+          "action": "install",
+          "target_version": "4.13",
+          "reason": "Required to resolve a core system dependency validation failure."
+        }
+      },
+      {
+        "rule_type": "REQUIRES",
+        "severity": "CRITICAL",
+        "source": "BIOS 3.0.0",
+        "target": "Intel Graphics Driver",
+        "message": "BIOS 3.0.0 requires Intel Graphics Driver, but it is not installed.",
+        "remediation": {
+          "component": "Intel Graphics Driver",
+          "action": "install",
+          "target_version": "32.0.101.5000",
+          "reason": "Required to resolve a core system dependency validation failure."
+        }
+      }
+    ]
+  }
+]
