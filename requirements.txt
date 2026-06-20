@@ -12,3 +12,6 @@ python-multipart
 pandas
 python-docx
 openpyxl
+openpyxl
+python-multipart
+rapidfuzz

@@ -174,3 +174,11 @@ RETURN
         }
     ) AS incoming_rules
 """
+
+# -----------------------------------------------------------------------------
+# Fetch all known unique component names (IDs) for normalization vocabulary
+# -----------------------------------------------------------------------------
+GET_GLOBAL_VOCABULARY_QUERY = """
+MATCH (n:ComplianceEntity)
+RETURN DISTINCT n.id AS name
+"""

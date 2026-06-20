@@ -22,7 +22,8 @@ from src.database.cypher_queries import (
     GET_COMPONENT_CONTEXT_QUERY,
     GET_RELEVANT_RELATIONSHIPS_QUERY,
     MERGE_METADATA_QUERY,
-    GET_METADATA_QUERY
+    GET_METADATA_QUERY,
+    GET_GLOBAL_VOCABULARY_QUERY
 )
 
 load_dotenv()
@@ -281,3 +282,12 @@ class Neo4jClient:
                 return None
 
             return dict(record)
+
+    def get_global_vocabulary(self) -> set[str]:
+        """
+        Return a set of all unique component names (IDs) known to the graph.
+        Useful for normalizers and fuzzy matching.
+        """
+        with self._driver.session() as session:
+            result = session.run(GET_GLOBAL_VOCABULARY_QUERY)
+            return {record["name"] for record in result}

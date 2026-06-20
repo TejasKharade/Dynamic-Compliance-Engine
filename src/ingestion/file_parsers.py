@@ -99,7 +99,7 @@ def parse_inventory_file(filepath: str) -> list[dict]:
         with open(filepath, 'r', encoding='utf-8') as f:
             data = json.load(f)
             if not isinstance(data, list):
-                raise ValueError("Inventory JSON must be a list of device objects.")
+                data = [data] # Allow single JSON objects
             return data
             
     elif ext in ["csv", "xlsx"]:
@@ -110,18 +110,13 @@ def parse_inventory_file(filepath: str) -> list[dict]:
             
         inventory = []
         for _, row in df.iterrows():
-            device_id = str(row.get("device_id", "Unknown"))
-            components = []
+            raw_record = {}
             for col in df.columns:
-                if col.lower() != "device_id":
-                    val = row[col]
-                    if pd.notna(val) and str(val).strip():
-                        components.append({"name": col, "version": str(val).strip()})
-                        
-            inventory.append({
-                "device_id": device_id,
-                "components": components
-            })
+                val = row[col]
+                if pd.notna(val) and str(val).strip():
+                    raw_record[col] = str(val).strip()
+            if raw_record:
+                inventory.append(raw_record)
         return inventory
         
     else:
