@@ -49,15 +49,26 @@ def _version_key(value: str) -> tuple:
 
 def _compare_versions(installed: str, operator: str, required: str) -> bool:
     installed_key = _version_key(installed)
-    required_key = _version_key(required)
+    
+    # Split required string by common delimiters to handle lists of versions (e.g. "4.11 and 4.12")
+    required_parts = [p.strip() for p in re.split(r'\s+and\s+|\s+or\s+|,', str(required).strip(), flags=re.IGNORECASE) if p.strip()]
+    
+    if not required_parts:
+        return True
 
-    if operator == "==": return installed_key == required_key
-    if operator == ">=": return installed_key >= required_key
-    if operator == "<":  return installed_key < required_key
-    if operator == ">":  return installed_key > required_key
-    if operator == "<=": return installed_key <= required_key
-    if operator == "!=": return installed_key != required_key
-    return True
+    if operator == "==":
+        return any(installed_key == _version_key(p) for p in required_parts)
+    if operator == "!=":
+        return all(installed_key != _version_key(p) for p in required_parts)
+    
+    for part in required_parts:
+        required_key = _version_key(part)
+        if operator == ">=" and installed_key >= required_key: return True
+        if operator == "<" and installed_key < required_key: return True
+        if operator == ">" and installed_key > required_key: return True
+        if operator == "<=" and installed_key <= required_key: return True
+
+    return False
 
 
 def _get_generic_name(node_id: str, node_type: str, valid_component_names: set[str]) -> str:
