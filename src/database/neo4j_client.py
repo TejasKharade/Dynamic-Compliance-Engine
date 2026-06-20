@@ -16,27 +16,13 @@ from src.database.cypher_queries import (
     MERGE_RELATIONSHIP_QUERY,
     CLEAR_GRAPH_QUERY,
     GET_FULL_GRAPH_QUERY,
-    GET_RELEVANT_RELATIONSHIPS_QUERY,
-)
-
-from src.database.cypher_queries import (
-    MERGE_NODE_QUERY,
-    MERGE_RELATIONSHIP_QUERY,
-    CLEAR_GRAPH_QUERY,
-    GET_FULL_GRAPH_QUERY,
-    GET_ALL_NODES_QUERY,
-    GET_ALL_RELATIONSHIPS_QUERY,
-)
-
-from src.database.cypher_queries import (
-    MERGE_NODE_QUERY,
-    MERGE_RELATIONSHIP_QUERY,
-    CLEAR_GRAPH_QUERY,
-    GET_FULL_GRAPH_QUERY,
     GET_ALL_NODES_QUERY,
     GET_ALL_RELATIONSHIPS_QUERY,
     GET_IMPACT_ANALYSIS_QUERY,
-    GET_COMPONENT_CONTEXT_QUERY
+    GET_COMPONENT_CONTEXT_QUERY,
+    GET_RELEVANT_RELATIONSHIPS_QUERY,
+    MERGE_METADATA_QUERY,
+    GET_METADATA_QUERY
 )
 
 load_dotenv()
@@ -116,6 +102,40 @@ class Neo4jClient:
         with self._driver.session() as session:
             session.run(CLEAR_GRAPH_QUERY)
         print("[Neo4j] Graph cleared — all nodes and relationships deleted.")
+
+    # ------------------------------------------------------------------
+    # Metadata management
+    # ------------------------------------------------------------------
+    def save_metadata(self, metadata: dict):
+        """
+        Save ruleset metadata to a singleton node.
+        """
+        with self._driver.session() as session:
+            session.run(MERGE_METADATA_QUERY, metadata=metadata)
+            
+    def get_metadata(self) -> dict:
+        """
+        Retrieve ruleset metadata from the singleton node.
+        """
+        with self._driver.session() as session:
+            result = session.run(GET_METADATA_QUERY)
+            record = result.single()
+            if not record:
+                return {
+                    "graph_loaded": False,
+                    "active_ruleset": None,
+                    "nodes": 0,
+                    "relationships": 0
+                }
+            
+            node = record["m"]
+            return {
+                "graph_loaded": True,
+                "active_ruleset": node.get("ruleset_name"),
+                "uploaded_at": node.get("uploaded_at"),
+                "nodes": node.get("node_count", 0),
+                "relationships": node.get("relationship_count", 0)
+            }
 
     # ------------------------------------------------------------------
     # Node upsert

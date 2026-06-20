@@ -10,7 +10,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from src.core.compliance_evaluator import evaluate_inventory
+from src.core.compliance_evaluator import evaluate_inventory, evaluate_inventory_from_db
 from src.database.neo4j_client import Neo4jClient
 from src.ingestion.text_extractor import extract_rules_from_file
 from src.schemas import ComplianceGraphDocument, DeviceComplianceReport, ComplianceFinding
@@ -461,6 +461,15 @@ def ingest_rules_only(rules_file: UploadFile = File(...)):
             db.verify_connection()
             db.clear_graph()
             db.push_graph(graph)
+            
+            metadata = {
+                "ruleset_name": rules_file.filename or "Unknown Ruleset",
+                "uploaded_at": datetime.utcnow().isoformat() + "Z",
+                "node_count": len(graph.nodes),
+                "relationship_count": len(graph.relationships)
+            }
+            db.save_metadata(metadata)
+            
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

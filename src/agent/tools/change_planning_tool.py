@@ -45,10 +45,12 @@ def _planned_component_id(component: str, target_version: str | None) -> str:
     if not target_version:
         return component
 
-    if component.startswith("BIOS ") or component.startswith("Windows "):
+    if component.startswith("BIOS") or component.startswith("Windows"):
         parts = component.split()
         if len(parts) >= 2:
             return " ".join(parts[:-1] + [target_version])
+        else:
+            return f"{component} {target_version}"
 
     return component
 
@@ -151,10 +153,18 @@ def simulate_change(component: str, target_version: str = "") -> dict:
     Simulate the impact of changing a component to a target version.
 
     Use this when the user asks:
+    - If I deploy BIOS 2.0.0 what else must change?
     - If I upgrade BIOS 1.6.2 to 2.0.0, what changes?
-    - What will break if I move to Windows 11 24H2?
-    - What devices are affected by this upgrade?
-    - What should I upgrade first?
+    - What happens if I install Windows 11 24H2?
+    - What is the impact of changing BIOS 2.0.0?
+    - Simulate upgrading BIOS 1.6.2 to 2.0.0
+    - Deployment impact analysis for BIOS 2.0.0
+    - What are the dependencies of BIOS 2.0.0?
+    - What must be upgraded before BIOS 2.0.0?
+    
+    Args:
+        component: The base component name or current version (e.g., "BIOS", "Windows 11", "BIOS 1.6.2").
+        target_version: The version to simulate upgrading to or deploying (e.g., "2.0.0", "24H2").
     """
 
     planned_component = _planned_component_id(component, target_version)

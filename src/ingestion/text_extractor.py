@@ -1,11 +1,11 @@
 from dotenv import load_dotenv
-import pypdf
 
 load_dotenv()
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 from src.schemas import ComplianceGraphDocument
+from src.ingestion.file_parsers import extract_and_chunk_rules_file
 
 # 1. Initialize the LLM Model
 llm = ChatOpenAI(temperature=0, model_name='gpt-4.1-mini')
@@ -297,24 +297,37 @@ def extract_rules_from_text(text: str) -> ComplianceGraphDocument:
     return extraction_chain.invoke({"input": text})
 
 
+def merge_graphs(graphs: list[ComplianceGraphDocument]) -> ComplianceGraphDocument:
+    nodes = {}
+    relationships = {}
+    
+    for graph in graphs:
+        for node in graph.nodes:
+            if node.id not in nodes:
+                nodes[node.id] = node
+                
+        for rel in graph.relationships:
+            rel_key = (rel.source, rel.target, rel.type, getattr(rel, 'operator', None), getattr(rel, 'min_version', None))
+            if rel_key not in relationships:
+                relationships[rel_key] = rel
+                
+    return ComplianceGraphDocument(
+        nodes=list(nodes.values()),
+        relationships=list(relationships.values())
+    )
+
 def extract_rules_from_file(filepath: str) -> ComplianceGraphDocument:
-    """Extract a compliance graph from a .txt or .pdf file."""
-    if filepath.lower().endswith(".pdf"):
-        return extract_rules_from_pdf(filepath)
-    with open(filepath, 'r', encoding='utf-8') as f:
-        text = f.read()
-    return extract_rules_from_text(text)
-
-
-def extract_rules_from_pdf(filepath: str) -> ComplianceGraphDocument:
-    """Extract a compliance graph from a PDF file using pypdf."""
-    reader = pypdf.PdfReader(filepath)
-    text = ""
-    for page in reader.pages:
-        extracted = page.extract_text()
-        if extracted:
-            text += extracted + "\n"
-    return extract_rules_from_text(text)
+    """Extract a compliance graph from a file, supporting chunks."""
+    chunks = extract_and_chunk_rules_file(filepath)
+    graphs = []
+    
+    for i, chunk in enumerate(chunks):
+        print(f"Extracting rules from chunk {i+1}/{len(chunks)}...")
+        graph = extract_rules_from_text(chunk)
+        if graph:
+            graphs.append(graph)
+            
+    return merge_graphs(graphs)
 
 
 async def extract_rules_from_text_async(text: str) -> ComplianceGraphDocument:

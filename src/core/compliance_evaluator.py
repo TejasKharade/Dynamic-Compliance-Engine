@@ -310,3 +310,50 @@ def evaluate_inventory(
             reports.append(evaluate_device(local_relationships, device, global_component_vocabulary))
 
     return reports
+
+
+def evaluate_inventory_from_db(
+    inventory: list[dict[str, Any]],
+) -> list[DeviceComplianceReport]:
+    reports: list[DeviceComplianceReport] = []
+
+    with Neo4jClient() as db:
+        db.verify_connection()
+        
+        full_graph = db.get_full_graph()
+        global_component_vocabulary: set[str] = set()
+        
+        for edge in full_graph:
+            for attr in ("source_type", "source_label", "source_node_type"):
+                if attr in edge and edge[attr]:
+                    global_component_vocabulary.add(str(edge[attr]).strip())
+            for attr in ("target_type", "target_label", "target_node_type"):
+                if attr in edge and edge[attr]:
+                    global_component_vocabulary.add(str(edge[attr]).strip())
+
+            if "source_id" in edge and edge["source_id"]:
+                src_clean = re.sub(r"[\d\.\s>=<!]+", "", str(edge["source_id"])).strip()
+                if src_clean: global_component_vocabulary.add(src_clean)
+                
+            if "target_id" in edge and edge["target_id"]:
+                tgt_clean = re.sub(r"[\d\.\s>=<!]+", "", str(edge["target_id"])).strip()
+                if tgt_clean: global_component_vocabulary.add(tgt_clean)
+
+        all_unique_installed_entities: set[str] = set()
+        device_cached_indexes: list[tuple[dict[str, Any], set[str]]] = []
+        
+        for device in inventory:
+            entity_ids, _, _ = _build_inventory_indexes(device)
+            all_unique_installed_entities.update(entity_ids)
+            device_cached_indexes.append((device, entity_ids))
+
+        master_relationship_pool = db.get_relevant_relationships(sorted(all_unique_installed_entities))
+
+        for device, entity_ids in device_cached_indexes:
+            local_relationships = [
+                rel for rel in master_relationship_pool
+                if str(rel["source_id"]).strip() in entity_ids or str(rel["target_id"]).strip() in entity_ids
+            ]
+            reports.append(evaluate_device(local_relationships, device, global_component_vocabulary))
+
+    return reports

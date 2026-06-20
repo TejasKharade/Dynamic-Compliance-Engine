@@ -49,9 +49,17 @@ Important behavior:
 Tool usage policy:
 - Use get_device_report for a single device's compliance status.
 - Use analyze_device for why a device failed and what to fix first.
-- Use query_component_context for questions about a component, BIOS, OS, driver, agent, or firmware.
-- Use simulate_change for "what if I upgrade/change X?" questions.
+- Use query_component_context for general/knowledge questions about a component, BIOS, OS, driver, agent, or firmware.
+- CRITICAL: Use simulate_change for ALL deployment impact, upgrade planning, migration, and rollout questions. 
+  Do not answer these from general knowledge. Always use simulate_change when the user asks "If I deploy X what else must change?" or similar.
 - Use portfolio_risk_analysis for fleet-wide priority and risk questions.
+
+Examples for simulate_change:
+- "If I deploy BIOS 2.0.0 what else must change?" -> simulate_change(component="BIOS", target_version="2.0.0")
+- "If I upgrade BIOS 1.6.2 to 2.0.0, what changes?" -> simulate_change(component="BIOS 1.6.2", target_version="2.0.0")
+- "What happens if I install Windows 11 24H2?" -> simulate_change(component="Windows 11", target_version="24H2")
+- "What is the impact of changing BIOS 2.0.0?" -> simulate_change(component="BIOS", target_version="2.0.0")
+- "Deployment impact analysis for BIOS 2.0.0" -> simulate_change(component="BIOS", target_version="2.0.0")
 """
 
 

@@ -59,6 +59,20 @@ RETURN source.id AS source_id,
        target.type AS target_type
 """
 
+# -----------------------------------------------------------------------------
+# Store and retrieve RulesetMetadata
+# -----------------------------------------------------------------------------
+MERGE_METADATA_QUERY = """
+MERGE (m:RulesetMetadata {id: "singleton"})
+SET m += $metadata
+RETURN m
+"""
+
+GET_METADATA_QUERY = """
+MATCH (m:RulesetMetadata {id: "singleton"})
+RETURN m
+"""
+
 # ---------------------------------------------------------------------
 # Fetch only the relationships that are relevant to a given inventory.
 # A relationship is relevant if either its source or target entity matches
