@@ -25,6 +25,23 @@ from src.agent.report_store import (
     get_all_reports_with_inventory,
     get_inventory_for_device,
 )
+from src.ingestion.file_parsers import parse_inventory_file
+from src.ingestion.normalizer import InventoryNormalizer
+from datetime import datetime
+
+# --------------- Vocabulary Cache ---------------
+_vocabulary_cache: set[str] | None = None
+
+def _get_vocabulary() -> set[str]:
+    global _vocabulary_cache
+    if _vocabulary_cache is None:
+        with Neo4jClient() as db:
+            _vocabulary_cache = db.get_global_vocabulary()
+    return _vocabulary_cache
+
+def clear_vocabulary_cache() -> None:
+    global _vocabulary_cache
+    _vocabulary_cache = None
 
 from src.ingestion.file_parsers import parse_inventory_file
 from src.ingestion.normalizer import InventoryNormalizer
@@ -425,7 +442,7 @@ def evaluate_from_json(payload: EvaluateRequest):
     inventory = InventoryNormalizer().normalize(payload.inventory, vocab)
     reports = evaluate_inventory(payload.graph, inventory)
 
-    for report, inv_item in zip(reports, payload.inventory):
+    for report, inv_item in zip(reports, inventory):
         register_report(report, inventory_item=inv_item)
 
     pairs = get_all_reports_with_inventory()
@@ -446,7 +463,9 @@ def evaluate_from_rules_and_inventory_files(
     finally:
         rules_path.unlink(missing_ok=True)
 
-    inventory = _load_inventory_json_from_upload(inventory_file)
+    raw_inventory = _load_inventory_json_from_upload(inventory_file)
+    vocab = {node.id for node in graph.nodes}
+    inventory = InventoryNormalizer().normalize(raw_inventory, vocab)
     clear_reports()
 
     reports = evaluate_inventory(graph, inventory)
@@ -459,6 +478,37 @@ def evaluate_from_rules_and_inventory_files(
 
 
 @app.post("/evaluate-inventory", response_model=EvaluationResponseOut)
+def evaluate_inventory_only(inventory_file: UploadFile = File(...)):
+    """
+    Evaluate an inventory file (JSON/CSV/XLSX) against the active Neo4j graph.
+    The normalization layer converts heterogeneous formats into the canonical schema.
+    """
+    inv_path = _save_upload_to_tempfile(inventory_file)
+    try:
+        raw_inventory = parse_inventory_file(str(inv_path))
+    except Exception as exc:
+        inv_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail=f"Invalid inventory file: {exc}")
+    finally:
+        inv_path.unlink(missing_ok=True)
+
+    vocab = _get_vocabulary()
+    inventory = InventoryNormalizer().normalize(raw_inventory, vocab)
+    clear_reports()
+
+    try:
+        reports = evaluate_inventory_from_db(inventory)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    for report, inv_item in zip(reports, inventory):
+        register_report(report, inventory_item=inv_item)
+
+    pairs = get_all_reports_with_inventory()
+    return _reports_to_response(pairs)
+
+
+@app.get("/evaluate-inventory", response_model=EvaluationResponseOut)
 def evaluate_inventory_cached():
     """
     Return the last-evaluated compliance results from the in-memory cache.
