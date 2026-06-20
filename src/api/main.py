@@ -10,12 +10,14 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from src.core.compliance_evaluator import evaluate_inventory
+from src.core.compliance_evaluator import evaluate_inventory, evaluate_inventory_from_db
 from src.database.neo4j_client import Neo4jClient
 from src.ingestion.text_extractor import extract_rules_from_file
 from src.schemas import ComplianceGraphDocument, DeviceComplianceReport
 from src.agent.compliance_react_agent import ask_agent
 from src.agent.report_store import clear_reports, register_report, list_report_ids, count_reports
+from src.ingestion.file_parsers import parse_inventory_file
+from datetime import datetime
  
 
 
@@ -148,6 +150,15 @@ def ingest_rules_only(rules_file: UploadFile = File(...)):
             db.verify_connection()
             db.clear_graph()
             db.push_graph(graph)
+            
+            metadata = {
+                "ruleset_name": rules_file.filename or "Unknown Ruleset",
+                "uploaded_at": datetime.utcnow().isoformat() + "Z",
+                "node_count": len(graph.nodes),
+                "relationship_count": len(graph.relationships)
+            }
+            db.save_metadata(metadata)
+            
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -156,6 +167,43 @@ def ingest_rules_only(rules_file: UploadFile = File(...)):
         "nodes": len(graph.nodes),
         "relationships": len(graph.relationships),
     }
+
+@app.post("/evaluate-inventory", response_model=list[DeviceComplianceReport])
+def evaluate_inventory_only(inventory_file: UploadFile = File(...)):
+    """
+    Evaluate an inventory file using the active graph stored in Neo4j.
+    """
+    inv_path = _save_upload_to_tempfile(inventory_file)
+    try:
+        inventory = parse_inventory_file(str(inv_path))
+    except Exception as exc:
+        inv_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail=f"Invalid inventory file: {exc}")
+    finally:
+        inv_path.unlink(missing_ok=True)
+        
+    clear_reports()
+    try:
+        reports = evaluate_inventory_from_db(inventory)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+        
+    for report in reports:
+        register_report(report)
+
+    return reports
+
+@app.get("/system/status")
+def system_status():
+    try:
+        with Neo4jClient() as db:
+            db.verify_connection()
+            metadata = db.get_metadata()
+            
+        metadata["reports_cached"] = count_reports()
+        return metadata
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/evaluate-neo4j", response_model=list[DeviceComplianceReport])
