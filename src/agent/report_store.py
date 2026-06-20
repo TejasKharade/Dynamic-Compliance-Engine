@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Any, Optional
 
 from src.schemas import DeviceComplianceReport
 
 _REPORTS_BY_RAW_ID: dict[str, DeviceComplianceReport] = {}
 _REPORTS_BY_CANONICAL_ID: dict[str, DeviceComplianceReport] = {}
+_INVENTORY_BY_DEVICE_ID: dict[str, dict[str, Any]] = {}
 
 
 def canonical_device_id(value: str) -> str:
@@ -34,17 +35,26 @@ def normalize_text(value: str) -> str:
 def clear_reports() -> None:
     _REPORTS_BY_RAW_ID.clear()
     _REPORTS_BY_CANONICAL_ID.clear()
+    _INVENTORY_BY_DEVICE_ID.clear()
 
 
-def register_report(report: DeviceComplianceReport) -> None:
+def register_report(report: DeviceComplianceReport, inventory_item: dict[str, Any] | None = None) -> None:
     """
     Register a report using both the full display id and the canonical id.
+    Optionally store the raw inventory item for spec extraction.
     """
     raw_id = report.device_id.strip()
     canonical_id = canonical_device_id(raw_id)
 
     _REPORTS_BY_RAW_ID[raw_id] = report
     _REPORTS_BY_CANONICAL_ID[canonical_id] = report
+    if inventory_item is not None:
+        _INVENTORY_BY_DEVICE_ID[raw_id] = inventory_item
+
+
+def get_inventory_for_device(device_id: str) -> dict[str, Any] | None:
+    """Return the raw inventory record for a given device_id."""
+    return _INVENTORY_BY_DEVICE_ID.get(device_id.strip())
 
 
 def find_report(query: str) -> Optional[DeviceComplianceReport]:
@@ -117,3 +127,16 @@ def list_report_ids() -> list[str]:
 
 def count_reports() -> int:
     return len(_REPORTS_BY_RAW_ID)
+
+
+def get_all_reports() -> list[DeviceComplianceReport]:
+    """Return all currently cached compliance reports."""
+    return list(_REPORTS_BY_RAW_ID.values())
+
+
+def get_all_reports_with_inventory() -> list[tuple[DeviceComplianceReport, dict[str, Any] | None]]:
+    """Return all reports paired with their raw inventory item (if stored)."""
+    return [
+        (report, _INVENTORY_BY_DEVICE_ID.get(raw_id))
+        for raw_id, report in _REPORTS_BY_RAW_ID.items()
+    ]

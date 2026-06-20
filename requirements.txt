@@ -1,0 +1,11 @@
+langchain-openai
+langchain-core
+neo4j
+pydantic
+pypdf
+pdfplumber
+fastapi
+uvicorn
+python-dotenv
+langgraph
+python-multipart

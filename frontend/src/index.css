@@ -1,0 +1,196 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ComplianceIQ - dark-only Dell enterprise console */
+    --background: 213 33% 6%;        /* #0A0E14 */
+    --foreground: 210 20% 92%;
+
+    --card: 215 25% 9%;              /* #11151C */
+    --card-foreground: 210 20% 92%;
+
+    --surface-2: 215 22% 12%;        /* #161B22 */
+
+    --popover: 215 25% 9%;
+    --popover-foreground: 210 20% 92%;
+
+    --primary: 205 100% 40%;         /* Dell blue #0076CE */
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 205 100% 55%;
+
+    --ai: 180 100% 42%;              /* AI cyan #00D4D4 */
+    --ai-foreground: 213 33% 6%;
+
+    --secondary: 215 22% 14%;
+    --secondary-foreground: 210 20% 92%;
+
+    --muted: 215 18% 14%;
+    --muted-foreground: 215 14% 55%;
+
+    --accent: 215 22% 16%;
+    --accent-foreground: 210 20% 92%;
+
+    --destructive: 358 76% 59%;      /* #E5484D */
+    --destructive-foreground: 0 0% 100%;
+
+    --warning: 35 91% 55%;           /* #F5A623 */
+    --warning-foreground: 213 33% 6%;
+
+    --success: 152 64% 54%;          /* #3DD68C */
+    --success-foreground: 213 33% 6%;
+
+    --info: 220 9% 46%;              /* #6B7280 */
+    --info-foreground: 0 0% 100%;
+
+    --border: 215 20% 18%;
+    --input: 215 20% 18%;
+    --ring: 205 100% 50%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 215 28% 7%;
+    --sidebar-foreground: 215 14% 65%;
+    --sidebar-primary: 205 100% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 22% 12%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 215 20% 14%;
+    --sidebar-ring: 205 100% 50%;
+
+    --severity-critical: 358 76% 59%;
+    --severity-high: 25 95% 58%;
+    --severity-medium: 35 91% 55%;
+    --severity-low: 152 64% 54%;
+
+    --shadow-glow-primary: 0 0 24px hsl(205 100% 50% / 0.25);
+    --shadow-glow-ai: 0 0 24px hsl(180 100% 42% / 0.2);
+    --shadow-glow-critical: 0 0 20px hsl(358 76% 59% / 0.35);
+  }
+
+  .light {
+    /* ComplianceIQ - light theme */
+    --background: 210 30% 98%;
+    --foreground: 215 28% 14%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 28% 14%;
+
+    --surface-2: 215 25% 96%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 28% 14%;
+
+    --primary: 205 100% 36%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 205 100% 50%;
+
+    --ai: 184 90% 32%;
+    --ai-foreground: 0 0% 100%;
+
+    --secondary: 215 25% 94%;
+    --secondary-foreground: 215 28% 14%;
+
+    --muted: 215 25% 94%;
+    --muted-foreground: 215 14% 40%;
+
+    --accent: 215 25% 92%;
+    --accent-foreground: 215 28% 14%;
+
+    --destructive: 358 70% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --warning: 32 92% 44%;
+    --warning-foreground: 0 0% 100%;
+
+    --success: 152 60% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --info: 220 9% 40%;
+    --info-foreground: 0 0% 100%;
+
+    --border: 215 20% 88%;
+    --input: 215 20% 88%;
+    --ring: 205 100% 45%;
+
+    --sidebar-background: 215 30% 96%;
+    --sidebar-foreground: 215 18% 32%;
+    --sidebar-primary: 205 100% 36%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 25% 92%;
+    --sidebar-accent-foreground: 215 28% 14%;
+    --sidebar-border: 215 20% 88%;
+    --sidebar-ring: 205 100% 45%;
+
+    --severity-critical: 358 70% 48%;
+    --severity-high: 25 92% 46%;
+    --severity-medium: 35 88% 44%;
+    --severity-low: 152 60% 36%;
+
+    --shadow-glow-primary: 0 0 16px hsl(205 100% 50% / 0.18);
+    --shadow-glow-ai: 0 0 16px hsl(184 90% 40% / 0.15);
+    --shadow-glow-critical: 0 0 14px hsl(358 70% 50% / 0.22);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html, body, #root {
+    background-color: hsl(var(--background));
+    min-height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-image:
+      radial-gradient(ellipse at top, hsl(205 100% 30% / 0.06), transparent 60%),
+      radial-gradient(ellipse at bottom right, hsl(180 100% 30% / 0.04), transparent 50%);
+    background-attachment: fixed;
+  }
+
+  .light body {
+    background-image:
+      radial-gradient(ellipse at top, hsl(205 100% 50% / 0.05), transparent 60%),
+      radial-gradient(ellipse at bottom right, hsl(184 90% 40% / 0.04), transparent 50%);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight text-foreground;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    background-color: hsl(var(--card) / 0.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid hsl(var(--border));
+  }
+  .glow-primary { box-shadow: var(--shadow-glow-primary); }
+  .glow-ai { box-shadow: var(--shadow-glow-ai); }
+  .glow-critical { box-shadow: var(--shadow-glow-critical); }
+
+  .status-dot {
+    @apply inline-block h-2 w-2 rounded-full;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 4px;
+  }
+}
