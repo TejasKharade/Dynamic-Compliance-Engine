@@ -1,9 +1,11 @@
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "@/components/AppLayout";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import FleetOverview from "./pages/FleetOverview";
 import GraphPage from "./pages/GraphPage";
 import DeviceDrilldown from "./pages/DeviceDrilldown";
@@ -16,6 +18,8 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
 });
 
+const wrap = (el: React.ReactNode) => <ErrorBoundary>{el}</ErrorBoundary>;
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider delayDuration={150}>
@@ -24,13 +28,13 @@ const App = () => (
       <BrowserRouter>
         <AppLayout>
           <Routes>
-            <Route path="/" element={<FleetOverview />} />
-            <Route path="/devices/:deviceId" element={<DeviceDrilldown />} />
-            <Route path="/graph" element={<GraphPage />} />
-            <Route path="/rules" element={<RuleIngestion />} />
-            <Route path="/assistant" element={<Assistant />} />
-            <Route path="/simulate" element={<SimulatePage />} />
-            <Route path="*" element={<NotFound />} />
+            <Route path="/"              element={wrap(<FleetOverview />)} />
+            <Route path="/devices/:deviceId" element={wrap(<DeviceDrilldown />)} />
+            <Route path="/graph"         element={wrap(<GraphPage />)} />
+            <Route path="/rules"         element={wrap(<RuleIngestion />)} />
+            <Route path="/assistant"     element={wrap(<Assistant />)} />
+            <Route path="/simulate"      element={wrap(<SimulatePage />)} />
+            <Route path="*"             element={wrap(<NotFound />)} />
           </Routes>
         </AppLayout>
       </BrowserRouter>

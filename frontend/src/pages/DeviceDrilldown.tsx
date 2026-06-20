@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import {
   ArrowLeft, RefreshCw, Sparkles, AlertTriangle, Upload, Plus,
   ChevronDown, Terminal, TriangleAlert, Info, Clock, Send,
-  Loader2, MessageSquare, X, Cpu, Server
+  Loader2, MessageSquare, X, Cpu, Server, Download, FileText
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -527,6 +527,8 @@ export default function DeviceDrilldown() {
   const [impact, setImpact] = useState<ImpactResult | null>(null);
   const [impactLoading, setImpactLoading] = useState(false);
   const [manualSpecs, setManualSpecs] = useState<DeviceSpec[]>([]);
+  const [scriptFormat, setScriptFormat] = useState<"powershell" | "bash">("powershell");
+  const [scriptOpen, setScriptOpen] = useState(false);
 
   const load = async () => {
     if (!deviceId) return;
@@ -601,6 +603,86 @@ export default function DeviceDrilldown() {
   const allSpecs = [...(device?.specs ?? []), ...manualSpecs];
   const remediationSteps = device?.remediation ?? [];
 
+  // ── PDF Export — opens a fresh window with self-contained HTML ───────────
+  const exportPDF = () => {
+    if (!device) return;
+    const violations = device.violations ?? [];
+    const steps = device.remediation ?? [];
+
+    const violationRows = violations.length === 0
+      ? '<p style="color:#16a34a">✓ No violations — device is fully compliant.</p>'
+      : violations.map((v) => {
+          const sev = (v.severity ?? "").toLowerCase();
+          const sevColor = sev === "critical" ? "#dc2626" : sev === "warning" ? "#ca8a04" : "#3b82f6";
+          const sevBg = sev === "critical" ? "#fee2e2" : sev === "warning" ? "#fef9c3" : "#dbeafe";
+          return `<div style="border:1px solid #e2e8f0;border-left:4px solid ${sevColor};border-radius:4pt;padding:8pt 10pt;margin-bottom:6pt;">
+            <span style="display:inline-block;background:${sevBg};color:${sevColor};font-size:7pt;font-weight:700;font-family:monospace;text-transform:uppercase;letter-spacing:.1em;padding:1pt 5pt;border-radius:2pt;margin-right:6pt;">${v.severity}</span>
+            ${v.rule_id ? `<span style="font-family:monospace;font-size:8pt;color:#64748b">${v.rule_id}</span>` : ""}
+            <div style="font-size:10pt;font-weight:600;margin:3pt 0 2pt">${v.message}</div>
+            ${v.explanation ? `<div style="font-size:9pt;color:#475569">${v.explanation}</div>` : ""}
+          </div>`;
+        }).join("");
+
+    const stepRows = steps.length === 0
+      ? '<p style="color:#64748b;font-size:9pt">No remediation steps available.</p>'
+      : steps.map((step, i) => {
+          const subRows = (step.sub_steps ?? []).map((sub) =>
+            `<div style="margin:2pt 0 2pt 26pt;font-size:9pt;color:#334155">${sub.order}. ${sub.description}</div>
+             ${sub.command ? `<div style="font-family:monospace;font-size:8pt;background:#f8fafc;border:1px solid #e2e8f0;border-radius:3pt;padding:3pt 6pt;margin:2pt 0 2pt 26pt;word-break:break-all">${sub.command}</div>` : ""}
+             ${sub.warning ? `<div style="margin:2pt 0 2pt 26pt;font-size:9pt;color:#ca8a04">⚠ ${sub.warning}</div>` : ""}`
+          ).join("");
+          return `<div style="border:1px solid #e2e8f0;border-radius:4pt;padding:8pt 10pt;margin-bottom:6pt;page-break-inside:avoid">
+            <div><span style="font-family:monospace;font-weight:800;color:#4f46e5">${step.order ?? i + 1}.</span>
+              <span style="font-weight:700;font-size:10pt;margin-left:6pt">${step.action}</span></div>
+            ${step.reason ? `<div style="font-size:9pt;color:#475569;margin:2pt 0 2pt 18pt">${step.reason}</div>` : ""}
+            ${step.estimated_time ? `<div style="font-size:8pt;color:#64748b;margin:1pt 0 4pt 18pt">Est. time: ${step.estimated_time}</div>` : ""}
+            ${subRows}
+          </div>`;
+        }).join("");
+
+    const scoreColor = (device.compliance_score ?? 0) >= 90 ? "#16a34a" : (device.compliance_score ?? 0) >= 70 ? "#ca8a04" : "#dc2626";
+
+    const html = `<!DOCTYPE html><html><head>
+      <meta charset="utf-8"/>
+      <title>Compliance Report — ${device.device_id}</title>
+      <style>
+        @page { margin: 18mm 14mm; size: A4 portrait; }
+        body { font-family: -apple-system, 'Segoe UI', sans-serif; font-size: 10pt; color: #0f172a; background: #fff; }
+        h1 { font-size: 18pt; font-weight: 700; color: #1e1b4b; margin: 0 0 4pt; }
+        .header { border-bottom: 2px solid #6366f1; padding-bottom: 12pt; margin-bottom: 16pt; display: flex; justify-content: space-between; align-items: flex-start; }
+        .score { font-size: 28pt; font-weight: 800; font-family: monospace; color: ${scoreColor}; }
+        .section-title { font-size: 11pt; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #4f46e5; border-bottom: 1px solid #e2e8f0; padding-bottom: 4pt; margin: 14pt 0 8pt; }
+        .footer { margin-top: 20pt; border-top: 1px solid #e2e8f0; padding-top: 8pt; font-size: 7.5pt; color: #94a3b8; font-family: monospace; }
+      </style>
+    </head><body>
+      <div class="header">
+        <div><h1>${device.name ?? device.device_id}</h1>
+          <div style="font-size:8pt;color:#64748b;font-family:monospace">Device ID: ${device.device_id} | Generated: ${new Date().toLocaleString()}</div>
+        </div>
+        <div style="text-align:right"><div class="score">${device.compliance_score ?? "—"}</div>
+          <div style="font-size:8pt;color:#64748b">/ 100 compliance score</div></div>
+      </div>
+      <div class="section-title">Violations (${violations.length})</div>
+      ${violationRows}
+      <div class="section-title">Remediation Plan (${steps.length} steps)</div>
+      ${stepRows}
+      <div class="footer">ComplianceIQ — Auto-generated compliance report | ${new Date().toISOString()}</div>
+    </body></html>`;
+
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) { toast.error("Pop-up blocked — allow pop-ups and try again."); return; }
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => { win.focus(); win.print(); }, 400);
+  };
+
+  const downloadScript = () => {
+    if (!device?.device_id) return;
+    api.downloadRemediationScript(device.device_id, scriptFormat);
+    toast.success(`Downloading ${scriptFormat === "bash" ? "Bash (.sh)" : "PowerShell (.ps1)"} script…`);
+    setScriptOpen(false);
+  };
+
   return (
     <div className="p-6 max-w-[1400px] mx-auto space-y-6">
       <Link to="/" className="inline-flex items-center gap-1.5 text-[12px] font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground">
@@ -614,7 +696,7 @@ export default function DeviceDrilldown() {
           <div className="font-mono text-[11px] text-muted-foreground">{device?.device_id}</div>
           {device?.last_evaluated && <div className="font-mono text-[11px] text-muted-foreground mt-2">Last evaluated: {device.last_evaluated}</div>}
         </div>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 flex-wrap">
           <div className="text-right">
             <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Compliance Score</div>
             <div className={cn("font-mono text-5xl font-semibold tabular-nums", scoreColor(device?.compliance_score))}>
@@ -623,8 +705,7 @@ export default function DeviceDrilldown() {
             </div>
           </div>
           <button onClick={load} className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-primary text-primary-foreground text-[13px] font-medium hover:bg-primary/90">
-            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-            Re-evaluate
+            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Re-evaluate
           </button>
         </div>
       </div>
@@ -687,14 +768,68 @@ export default function DeviceDrilldown() {
             : remediationSteps.length === 0 ? (
               <div className="glass-panel rounded-xl p-8 text-center text-muted-foreground">No remediation plan available.</div>
             ) : (
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 px-1 mb-4">
+              <div className="space-y-4">
+
+                {/* ── Export card (F8 + F5) ── */}
+                <div className="glass-panel rounded-xl p-5 border border-border">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Export Remediation</div>
+                      <div className="text-[13px] font-medium">
+                        {remediationSteps.length} step{remediationSteps.length !== 1 ? "s" : ""} ready to export
+                      </div>
+                    </div>
+                    <Download className="h-5 w-5 text-primary/60" />
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    {/* PowerShell */}
+                    <button
+                      onClick={() => { setScriptFormat("powershell"); downloadScript(); }}
+                      className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card/60 px-4 py-4 hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                    >
+                      <span className="text-2xl">⚡</span>
+                      <div className="text-center">
+                        <div className="text-[13px] font-semibold group-hover:text-primary transition-colors">PowerShell</div>
+                        <div className="font-mono text-[10px] text-muted-foreground">.ps1</div>
+                      </div>
+                    </button>
+
+                    {/* Bash */}
+                    <button
+                      onClick={() => { setScriptFormat("bash"); downloadScript(); }}
+                      className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card/60 px-4 py-4 hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                    >
+                      <span className="text-2xl">🐧</span>
+                      <div className="text-center">
+                        <div className="text-[13px] font-semibold group-hover:text-primary transition-colors">Bash</div>
+                        <div className="font-mono text-[10px] text-muted-foreground">.sh</div>
+                      </div>
+                    </button>
+
+                    {/* PDF */}
+                    <button
+                      onClick={exportPDF}
+                      className="flex flex-col items-center gap-2 rounded-xl border border-border bg-card/60 px-4 py-4 hover:border-destructive/50 hover:bg-destructive/5 transition-all group"
+                    >
+                      <FileText className="h-7 w-7 text-muted-foreground group-hover:text-destructive transition-colors" />
+                      <div className="text-center">
+                        <div className="text-[13px] font-semibold group-hover:text-destructive transition-colors">PDF Report</div>
+                        <div className="font-mono text-[10px] text-muted-foreground">.pdf</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── Divider ── */}
+                <div className="flex items-center gap-3 px-1">
                   <div className="h-px flex-1 bg-border" />
                   <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                     {remediationSteps.length} action{remediationSteps.length !== 1 ? "s" : ""} · click any step to expand
                   </div>
                   <div className="h-px flex-1 bg-border" />
                 </div>
+
                 {remediationSteps.map((s, i) => (
                   <RemediationStepCard key={i} step={s} index={s.order ?? i + 1} />
                 ))}

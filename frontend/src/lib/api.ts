@@ -305,4 +305,18 @@ export const api = {
         session_id: payload.session_id ?? "default",
       }),
     }),
+
+  /**
+   * GET /devices/{device_id}/remediation-script?format=powershell|bash
+   * Triggers a browser file download of the generated script.
+   */
+  downloadRemediationScript: (deviceId: string, format: "powershell" | "bash") => {
+    const url = `${API_BASE_URL}/devices/${encodeURIComponent(deviceId)}/remediation-script?format=${format}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `remediation_${deviceId}.${format === "bash" ? "sh" : "ps1"}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  },
 };
