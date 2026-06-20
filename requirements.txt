@@ -9,3 +9,6 @@ uvicorn
 python-dotenv
 langgraph
 python-multipart
+pandas
+python-docx
+openpyxl

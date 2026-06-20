@@ -185,7 +185,7 @@ export const api = {
    * Returns cached compliance results without re-running evaluation.
    * Used by FleetOverview and DeviceDrilldown.
    */
-  evaluateInventory: (_payload?: { inventory?: unknown }) =>
+  evaluateInventory: () =>
     request<EvaluationResponse>("/evaluate-inventory", {
       method: "POST",
     }),

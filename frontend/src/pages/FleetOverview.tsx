@@ -38,7 +38,7 @@ export default function FleetOverview() {
     setLoading(true);
     setError(null);
     api
-      .evaluateInventory({})
+      .evaluateInventory()
       .then((res) => setData(res))
       .catch((e: ApiError) => setError(e.message))
       .finally(() => setLoading(false));

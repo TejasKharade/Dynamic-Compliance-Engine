@@ -532,6 +532,8 @@ def get_impact(component: str | None = None, device_id: str | None = None):
     """
     Returns components affected when the given component/device changes.
     Accepts either ?component=X or ?device_id=X (both are treated the same way).
+    Queries Neo4j for upstream (depends-on-this) and downstream (required-by-this)
+    compliance entities and returns them as a flat list.
     """
     target = component or device_id
     if not target:
@@ -539,12 +541,56 @@ def get_impact(component: str | None = None, device_id: str | None = None):
     try:
         with Neo4jClient() as db:
             db.verify_connection()
-            results = db.get_impact_analysis(target)
+            record = db.get_impact_analysis(target)
+
+        # get_impact_analysis returns a single dict with keys:
+        #   center_node, upstream_dependencies, downstream_dependencies
+        # Each dependency list contains dicts like:
+        #   { direction, component, component_type, relationship }
+        # We flatten both lists into affected_components for the frontend.
+
+        if not record:
             return {
                 "component": target,
-                "count": len(results),
-                "affected_components": results,
+                "count": 0,
+                "affected_components": [],
+                "center_found": False,
             }
+
+        upstream: list[dict] = record.get("upstream_dependencies") or []
+        downstream: list[dict] = record.get("downstream_dependencies") or []
+
+        # Filter out null/empty entries that Neo4j OPTIONAL MATCH may inject
+        def _is_valid(dep: dict) -> bool:
+            return bool(dep and dep.get("component"))
+
+        upstream = [d for d in upstream if _is_valid(d)]
+        downstream = [d for d in downstream if _is_valid(d)]
+
+        affected: list[dict] = []
+        for dep in upstream:
+            affected.append({
+                "id": dep.get("component"),
+                "name": dep.get("component"),
+                "type": dep.get("component_type") or "unknown",
+                "direction": "DEPENDS_ON_THIS",
+                "relationship": dep.get("relationship") or "",
+            })
+        for dep in downstream:
+            affected.append({
+                "id": dep.get("component"),
+                "name": dep.get("component"),
+                "type": dep.get("component_type") or "unknown",
+                "direction": "REQUIRED_BY_THIS",
+                "relationship": dep.get("relationship") or "",
+            })
+
+        return {
+            "component": target,
+            "count": len(affected),
+            "center": record.get("center_node"),
+            "affected_components": affected,
+        }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 

@@ -1,38 +1,87 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
-import { api, ApiError, GraphEdge, GraphResponse } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { Search, AlertTriangle, Network, X } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Search, AlertTriangle, Network, X, RefreshCw, Info } from "lucide-react";
+
+// --- Relationship colour + style map ---
+
+const REL_STYLES: Record<string, { color: string; label: string }> = {
+  REQUIRES:        { color: "hsl(217 91% 60%)",  label: "Requires"        },
+  CONFLICTS_WITH:  { color: "hsl(0 84% 60%)",    label: "Conflicts With"  },
+  COMPATIBLE_WITH: { color: "hsl(142 71% 45%)",  label: "Compatible With" },
+  RECOMMENDS:      { color: "hsl(270 60% 65%)",  label: "Recommends"      },
+  WARNS_AGAINST:   { color: "hsl(38 92% 55%)",   label: "Warns Against"   },
+};
+const DEFAULT_REL_COLOR = "hsl(215 20% 50%)";
 
 function relColor(rel?: string) {
-  const r = (rel ?? "").toLowerCase();
-  if (r.includes("conflict")) return "hsl(var(--destructive))";
-  if (r.includes("deprecat")) return "hsl(var(--warning))";
-  if (r.includes("require")) return "hsl(var(--primary))";
-  return "hsl(var(--muted-foreground))";
+  return REL_STYLES[rel ?? ""]?.color ?? DEFAULT_REL_COLOR;
 }
 
+// --- Node colours by type ---
+
+const NODE_COLORS: Record<string, string> = {
+  FIRMWARE: "hsl(217 91% 65%)",
+  DRIVER:   "hsl(142 70% 50%)",
+  SOFTWARE: "hsl(270 60% 65%)",
+  HARDWARE: "hsl(38 92% 55%)",
+  SECURITY: "hsl(0 84% 65%)",
+  OS:       "hsl(190 80% 55%)",
+};
+function nodeColor(type?: string) {
+  return NODE_COLORS[(type ?? "").toUpperCase()] ?? "hsl(205 80% 55%)";
+}
+
+// --- Raw backend shapes ---
+interface RawNode { id: string; type?: string; label?: string; name?: string; [k: string]: unknown }
+interface RawEdge {
+  source_id?: string; source?: string;
+  target_id?: string; target?: string;
+  relationship_type?: string; relationship?: string;
+  operator?: string; min_version?: string;
+  [k: string]: unknown;
+}
+interface RawGraph { nodes: RawNode[]; edges?: RawEdge[]; links?: RawEdge[] }
+
+// --- Detect current theme (dark = documentElement has no .light class) ---
+function useIsDark(): boolean {
+  const [isDark, setIsDark] = useState(() => !document.documentElement.classList.contains("light"));
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(!document.documentElement.classList.contains("light"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+}
+
+// --- Graph Page ---
+
 export default function GraphPage() {
-  const [view, setView] = useState<"full" | "network">("full");
-  const [data, setData] = useState<GraphResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<{ id: string; label?: string; type?: string } | null>(null);
+  const [data, setData]         = useState<RawGraph | null>(null);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
+  const [query, setQuery]       = useState("");
+  const [selected, setSelected] = useState<RawNode | null>(null);
+  const [activeRels, setActiveRels] = useState<Set<string>>(new Set(Object.keys(REL_STYLES)));
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fgRef = useRef<any>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
+  const isDark = useIsDark();
 
-  useEffect(() => {
+  const fetchGraph = useCallback(() => {
     setLoading(true);
     setError(null);
-    (view === "full" ? api.graphFull() : api.graphNetwork())
-      .then((res) => setData(res))
+    api.graphNetwork()
+      .then((res) => setData(res as unknown as RawGraph))
       .catch((e: ApiError) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [view]);
+  }, []);
+
+  useEffect(() => { fetchGraph(); }, [fetchGraph]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -44,142 +93,353 @@ export default function GraphPage() {
     return () => ro.disconnect();
   }, []);
 
+  // Normalise graph: map backend field names to force-graph field names
   const graph = useMemo(() => {
-    const nodes = (data?.nodes ?? []).map((n) => ({ ...n, id: n.id, name: n.label ?? n.id }));
-    const linksRaw: GraphEdge[] = (data?.edges ?? data?.links ?? []) as GraphEdge[];
-    const links = linksRaw.map((e) => ({ ...e, source: e.source, target: e.target }));
+    if (!data) return { nodes: [], links: [] };
+    const nodes = (data.nodes ?? []).map((n) => ({
+      ...n,
+      id:   n.id,
+      name: n.label ?? n.id,
+      type: n.type,
+    }));
+    const rawEdges: RawEdge[] = (data.edges ?? data.links ?? []);
+    const links = rawEdges
+      .map((e) => ({
+        source:       e.source_id ?? e.source ?? "",
+        target:       e.target_id ?? e.target ?? "",
+        relationship: e.relationship_type ?? e.relationship ?? "",
+        operator:     e.operator,
+        min_version:  e.min_version,
+      }))
+      .filter((e) => e.source && e.target);
     return { nodes, links };
   }, [data]);
 
-  const focusNode = (id: string) => {
+  // Filtered links
+  const filteredGraph = useMemo(() => ({
+    nodes: graph.nodes,
+    links: graph.links.filter((l) => activeRels.has(l.relationship)),
+  }), [graph, activeRels]);
+
+  // Stats
+  const relCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    graph.links.forEach((l) => { counts[l.relationship] = (counts[l.relationship] ?? 0) + 1; });
+    return counts;
+  }, [graph]);
+
+  const focusNode = useCallback((id: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const node = graph.nodes.find((n) => n.id === id) as any;
+    const node = (graph.nodes as any[]).find((n) => n.id === id);
     if (node && fgRef.current && typeof node.x === "number") {
       fgRef.current.centerAt(node.x, node.y, 600);
       fgRef.current.zoom(4, 600);
-      setSelected({ id: node.id, label: node.label as string | undefined, type: node.type as string | undefined });
+      setSelected(node);
     }
+  }, [graph.nodes]);
+
+  const toggleRel = (rel: string) => {
+    setActiveRels((prev) => {
+      const next = new Set(prev);
+      if (next.has(rel)) next.delete(rel); else next.add(rel);
+      return next;
+    });
   };
+
+  // Node canvas draw — theme-aware text colours
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const drawNode = useCallback((node: any, ctx: CanvasRenderingContext2D, scale: number) => {
+    const isSel  = selected?.id === node.id;
+    const radius = isSel ? 7 : 4.5;
+    const color  = nodeColor(node.type);
+
+    // Glow ring for selected node
+    if (isSel) {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, radius + 4, 0, 2 * Math.PI);
+      ctx.fillStyle = color + "2a";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, radius + 2, 0, 2 * Math.PI);
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 1.5;
+      ctx.stroke();
+    }
+
+    // Node circle
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+
+    // Label — theme-aware: dark text on light bg, light text on dark bg
+    if (scale > 1.2 || isSel) {
+      const label    = String(node.name ?? node.id);
+      const fontSize = isSel ? Math.max(4, 11 / scale) : Math.max(3, 9 / scale);
+      ctx.font      = `${isSel ? "600 " : ""}${fontSize}px Inter, sans-serif`;
+      ctx.textAlign = "center";
+      const labelY  = node.y + radius + fontSize + 1;
+
+      if (isDark) {
+        // Dark theme: white-ish label with subtle shadow
+        ctx.shadowColor   = "rgba(0,0,0,0.7)";
+        ctx.shadowBlur    = 3;
+        ctx.fillStyle     = isSel ? "#ffffff" : "rgba(220,230,245,0.88)";
+        ctx.fillText(label, node.x, labelY);
+        ctx.shadowBlur    = 0;
+        ctx.shadowColor   = "transparent";
+      } else {
+        // Light theme: draw a white outline/halo first, then dark text
+        ctx.lineWidth     = 3;
+        ctx.strokeStyle   = "rgba(255,255,255,0.92)";
+        ctx.lineJoin      = "round";
+        ctx.strokeText(label, node.x, labelY);
+        ctx.fillStyle     = isSel ? "#0a0a0a" : "rgba(20,30,50,0.90)";
+        ctx.fillText(label, node.x, labelY);
+      }
+    }
+  }, [selected, isDark]);
 
   return (
     <div className="p-6 space-y-4 max-w-[1600px] mx-auto">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <div className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-1">// Compatibility Graph</div>
+          <div className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-1">// Compliance Knowledge Graph</div>
           <h1 className="text-2xl font-semibold">Knowledge Graph Visualizer</h1>
-          <p className="text-sm text-muted-foreground mt-1">Interactive component compatibility network. Drag, zoom, click any node to inspect.</p>
+          <p className="text-sm text-muted-foreground mt-1">Interactive component dependency network · Drag, zoom, click nodes to inspect</p>
         </div>
-        <div className="inline-flex rounded-md border border-border p-0.5 bg-card/50">
-          {(["full", "network"] as const).map((v) => (
-            <button key={v} onClick={() => setView(v)} className={cn("px-3 h-8 rounded text-[11px] font-mono uppercase tracking-wider", view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>{v} graph</button>
-          ))}
-        </div>
+        <button
+          onClick={fetchGraph}
+          disabled={loading}
+          className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-border text-[12px] font-mono text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-50"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh Graph
+        </button>
       </div>
 
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-card/50 flex-1 max-w-md">
-          <Search className="h-3.5 w-3.5 text-muted-foreground" />
+      {/* Stats bar */}
+      {!loading && !error && graph.nodes.length > 0 && (
+        <div className="flex items-center gap-4 flex-wrap">
+          <span className="font-mono text-[11px] text-muted-foreground"><span className="text-foreground font-semibold">{graph.nodes.length}</span> nodes</span>
+          <span className="font-mono text-[11px] text-muted-foreground"><span className="text-foreground font-semibold">{graph.links.length}</span> edges</span>
+          <span className="h-3 w-px bg-border" />
+          {Object.entries(relCounts).map(([rel, count]) => (
+            <span key={rel} className="font-mono text-[11px] text-muted-foreground flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full inline-block" style={{ background: relColor(rel) }} />
+              {count} {rel.toLowerCase().replace(/_/g, " ")}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-card/50 flex-1 max-w-sm">
+          <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && query) {
-                const hit = graph.nodes.find((n) => String(n.id).toLowerCase().includes(query.toLowerCase()) || String(n.name ?? "").toLowerCase().includes(query.toLowerCase()));
+                const hit = (graph.nodes as RawNode[]).find(
+                  (n) => String(n.id).toLowerCase().includes(query.toLowerCase()) || String(n.name ?? "").toLowerCase().includes(query.toLowerCase()),
+                );
                 if (hit) focusNode(hit.id as string);
               }
             }}
-            placeholder="Jump to component (BIOS, iDRAC, …)"
+            placeholder="Jump to component (Enter to search)…"
             className="flex-1 bg-transparent text-[13px] outline-none"
           />
+          {query && <button onClick={() => setQuery("")}><X className="h-3 w-3 text-muted-foreground" /></button>}
         </div>
-        <div className="flex items-center gap-3 text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
-          {[{ label: "requires", color: "hsl(var(--primary))" }, { label: "conflicts", color: "hsl(var(--destructive))" }, { label: "deprecated", color: "hsl(var(--warning))" }].map((i) => (
-            <span key={i.label} className="flex items-center gap-1.5"><span className="h-0.5 w-4" style={{ background: i.color }} />{i.label}</span>
-          ))}
+
+        {/* Relationship filter chips */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {Object.entries(REL_STYLES).map(([rel, { color, label }]) => {
+            const active = activeRels.has(rel);
+            return (
+              <button
+                key={rel}
+                onClick={() => toggleRel(rel)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border font-mono text-[10px] uppercase tracking-wider transition-all",
+                  active ? "text-white border-transparent" : "border-border text-muted-foreground opacity-50 hover:opacity-75",
+                )}
+                style={active ? { background: color } : {}}
+                title={`${active ? "Hide" : "Show"} ${label}`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                {label}
+                {relCounts[rel] != null && <span className="opacity-75">({relCounts[rel]})</span>}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-        <div ref={containerRef} className="glass-panel rounded-lg overflow-hidden relative" style={{ height: "min(70vh, 720px)" }}>
-          {loading && <div className="absolute inset-0 grid place-items-center"><Skeleton className="h-full w-full" /></div>}
+      {/* Main layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
+        {/* Graph canvas */}
+        <div ref={containerRef} className="glass-panel rounded-xl overflow-hidden relative" style={{ height: "min(72vh, 740px)" }}>
+          {loading && (
+            <div className="absolute inset-0 grid place-items-center">
+              <div className="text-center space-y-2">
+                <RefreshCw className="h-6 w-6 text-muted-foreground animate-spin mx-auto" />
+                <div className="text-sm text-muted-foreground font-mono">Loading graph from Neo4j…</div>
+              </div>
+            </div>
+          )}
           {error && (
-            <div className="absolute inset-0 grid place-items-center text-center px-4">
-              <div><AlertTriangle className="h-8 w-8 text-destructive mx-auto mb-2" /><div className="text-sm text-destructive">{error}</div></div>
+            <div className="absolute inset-0 grid place-items-center text-center px-6">
+              <div className="space-y-2">
+                <AlertTriangle className="h-8 w-8 text-destructive mx-auto" />
+                <div className="text-sm text-destructive">{error}</div>
+                <button onClick={fetchGraph} className="text-[12px] font-mono text-muted-foreground hover:text-foreground underline">Retry</button>
+              </div>
             </div>
           )}
           {!loading && !error && graph.nodes.length === 0 && (
-            <div className="absolute inset-0 grid place-items-center text-center px-4">
-              <div><Network className="h-8 w-8 text-muted-foreground mx-auto mb-2" /><div className="text-sm text-muted-foreground">No graph data yet. Ingest rules to populate the compatibility graph.</div></div>
+            <div className="absolute inset-0 grid place-items-center text-center px-6">
+              <div className="space-y-3">
+                <Network className="h-10 w-10 text-muted-foreground mx-auto" />
+                <div className="text-sm font-medium text-muted-foreground">No graph data yet</div>
+                <div className="text-[12px] text-muted-foreground/60">
+                  Ingest a rules file from the <strong>Rule Ingestion</strong> page to populate the compliance knowledge graph.
+                </div>
+              </div>
             </div>
           )}
           {!loading && !error && graph.nodes.length > 0 && (
             <ForceGraph2D
               ref={fgRef}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              graphData={graph as any}
+              graphData={filteredGraph as any}
               width={size.w}
               height={size.h}
-              backgroundColor="rgba(0,0,0,0)"
+              backgroundColor={isDark ? "rgba(0,0,0,0)" : "rgba(255,255,255,0)"}
               nodeRelSize={5}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               linkColor={(l: any) => relColor(l.relationship)}
-              linkDirectionalArrowLength={4}
-              linkDirectionalArrowRelPos={0.85}
+              linkDirectionalArrowLength={5}
+              linkDirectionalArrowRelPos={0.88}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              linkWidth={(l: any) => (selected && ((l.source.id ?? l.source) === selected.id || (l.target.id ?? l.target) === selected.id) ? 2 : 0.8)}
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              nodeCanvasObject={(node: any, ctx, scale) => {
-                const label = node.name ?? node.id;
-                const isSel = selected?.id === node.id;
-                ctx.beginPath();
-                ctx.arc(node.x, node.y, isSel ? 6 : 4, 0, 2 * Math.PI);
-                ctx.fillStyle = isSel ? "hsl(180 100% 50%)" : "hsl(205 100% 55%)";
-                ctx.fill();
-                if (isSel) { ctx.lineWidth = 1.5; ctx.strokeStyle = "hsl(180 100% 70%)"; ctx.stroke(); }
-                if (scale > 1.2) {
-                  ctx.font = `${10 / scale}px Inter, sans-serif`;
-                  ctx.fillStyle = "rgba(230,235,245,0.85)";
-                  ctx.textAlign = "center";
-                  ctx.fillText(String(label), node.x, node.y + 10 / scale);
-                }
+              linkWidth={(l: any) => {
+                if (!selected) return 1;
+                const s = typeof l.source === "object" ? l.source.id : l.source;
+                const t = typeof l.target === "object" ? l.target.id : l.target;
+                return s === selected.id || t === selected.id ? 2.5 : 0.4;
               }}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              onNodeClick={(n: any) => focusNode(n.id)}
+              linkDirectionalParticles={(l: any) => {
+                const r: string = l.relationship ?? "";
+                if (r === "CONFLICTS_WITH") return 3;
+                if (r === "REQUIRES" || r === "WARNS_AGAINST") return 2;
+                if (r === "RECOMMENDS") return 1;
+                return 0;
+              }}
+              linkDirectionalParticleWidth={2}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              linkDirectionalParticleColor={(l: any) => relColor(l.relationship)}
+              nodeCanvasObject={drawNode}
+              nodeCanvasObjectMode={() => "replace"}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              onNodeClick={(n: any) => { if (selected?.id === n.id) { setSelected(null); return; } focusNode(n.id); }}
+              onBackgroundClick={() => setSelected(null)}
+              cooldownTicks={120}
+              d3AlphaDecay={0.02}
+              d3VelocityDecay={0.3}
             />
           )}
         </div>
 
-        <aside className="glass-panel rounded-lg p-4 h-fit lg:sticky lg:top-20">
-          <div className="flex items-center justify-between mb-3">
+        {/* Inspector sidebar */}
+        <aside className="glass-panel rounded-xl p-5 h-fit lg:sticky lg:top-20 space-y-4">
+          <div className="flex items-center justify-between">
             <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Node Inspector</div>
-            {selected && (<button onClick={() => setSelected(null)} className="text-muted-foreground hover:text-foreground"><X className="h-3.5 w-3.5" /></button>)}
+            {selected && (
+              <button onClick={() => setSelected(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
+
           {!selected ? (
-            <div className="text-sm text-muted-foreground">Select a node to view its relationships and affected devices.</div>
-          ) : (
-            <div className="space-y-3">
-              <div>
-                <div className="font-mono text-[10px] uppercase text-muted-foreground">ID</div>
-                <div className="font-mono text-sm text-foreground break-all">{selected.id}</div>
+            <div className="space-y-4">
+              <div className="flex items-start gap-2 text-[12px] text-muted-foreground">
+                <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>Click any node in the graph to inspect its details and connections.</span>
               </div>
-              {selected.type && (<div><div className="font-mono text-[10px] uppercase text-muted-foreground">Type</div><div className="text-sm">{selected.type}</div></div>)}
               <div>
-                <div className="font-mono text-[10px] uppercase text-muted-foreground mb-1">Edges</div>
-                <ul className="space-y-1 text-[12px]">
-                  {graph.links
+                <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Edge Types</div>
+                <div className="space-y-1.5">
+                  {Object.entries(REL_STYLES).map(([rel, { color, label }]) => (
+                    <div key={rel} className="flex items-center gap-2">
+                      <span className="h-0.5 w-5 rounded-full shrink-0" style={{ background: color }} />
+                      <span className="font-mono text-[10px] text-muted-foreground">{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Node Types</div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                  {Object.entries(NODE_COLORS).map(([type, color]) => (
+                    <div key={type} className="flex items-center gap-1.5">
+                      <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
+                      <span className="font-mono text-[10px] text-muted-foreground capitalize">{type.toLowerCase()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-start gap-2">
+                <span className="mt-1 h-3 w-3 rounded-full shrink-0" style={{ background: nodeColor(selected.type as string) }} />
+                <div>
+                  <div className="font-semibold text-[14px] break-all">{String(selected.id)}</div>
+                  {selected.type && (
+                    <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mt-0.5">{String(selected.type)}</div>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Connected Edges</div>
+                <ul className="space-y-2">
+                  {filteredGraph.links
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     .filter((l: any) => (l.source.id ?? l.source) === selected.id || (l.target.id ?? l.target) === selected.id)
-                    .slice(0, 20)
+                    .slice(0, 25)
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     .map((l: any, i) => {
                       const sId = typeof l.source === "object" ? l.source.id : l.source;
                       const tId = typeof l.target === "object" ? l.target.id : l.target;
-                      const other = sId === selected.id ? tId : sId;
+                      const isSource = sId === selected.id;
+                      const other    = isSource ? tId : sId;
+                      const rel: string = l.relationship ?? "unknown";
+                      const ver  = l.min_version ? `${l.operator ?? ">="} ${l.min_version}` : null;
                       return (
-                        <li key={i} className="flex items-center gap-2">
-                          <span className="h-1.5 w-1.5 rounded-full" style={{ background: relColor(l.relationship) }} />
-                          <span className="font-mono text-[11px] uppercase text-muted-foreground">{l.relationship ?? "rel"}</span>
-                          <button className="text-primary hover:underline truncate font-mono" onClick={() => focusNode(other)}>{other}</button>
+                        <li key={i} className="flex items-start gap-2 text-[11px]">
+                          <span className="mt-1 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: relColor(rel) }} />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span
+                                className="font-mono text-[9px] uppercase tracking-wider px-1 py-0.5 rounded"
+                                style={{ background: relColor(rel) + "30", color: relColor(rel) }}
+                              >
+                                {rel.replace(/_/g, " ")}
+                              </span>
+                              {!isSource && <span className="text-muted-foreground text-[9px]">← incoming</span>}
+                            </div>
+                            <button
+                              className="text-primary hover:underline truncate font-mono text-[11px] mt-0.5 block"
+                              onClick={() => focusNode(other)}
+                            >
+                              {other}
+                            </button>
+                            {ver && <div className="font-mono text-[9px] text-muted-foreground">{ver}</div>}
+                          </div>
                         </li>
                       );
                     })}
