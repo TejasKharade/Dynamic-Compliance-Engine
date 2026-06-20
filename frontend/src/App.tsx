@@ -9,7 +9,7 @@ import GraphPage from "./pages/GraphPage";
 import DeviceDrilldown from "./pages/DeviceDrilldown";
 import RuleIngestion from "./pages/RuleIngestion";
 import Assistant from "./pages/Assistant";
-import SystemStatus from "./pages/SystemStatus";
+import SimulatePage from "./pages/SimulatePage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -29,7 +29,7 @@ const App = () => (
             <Route path="/graph" element={<GraphPage />} />
             <Route path="/rules" element={<RuleIngestion />} />
             <Route path="/assistant" element={<Assistant />} />
-            <Route path="/status" element={<SystemStatus />} />
+            <Route path="/simulate" element={<SimulatePage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AppLayout>

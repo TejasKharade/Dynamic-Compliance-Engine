@@ -127,7 +127,7 @@ function RemediationChatbot({ device }: { device: DeviceEvaluation | null }) {
                     ? "bg-primary text-primary-foreground rounded-br-sm"
                     : "bg-card border border-border text-foreground/90 rounded-bl-sm",
                 )}>
-                  <div className="prose prose-invert prose-sm max-w-none prose-p:my-1 prose-pre:text-[11px] prose-code:text-ai">
+                  <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-p:text-foreground prose-pre:text-[11px] prose-code:text-ai prose-code:before:content-none prose-code:after:content-none prose-li:text-foreground prose-strong:text-foreground">
                     <ReactMarkdown>{m.content}</ReactMarkdown>
                   </div>
                 </div>

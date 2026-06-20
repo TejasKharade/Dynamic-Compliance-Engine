@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { Upload, FileText, AlertTriangle, Loader2, Database } from "lucide-react";
 import { toast } from "sonner";
 
-type Mode = "ingest" | "evaluate" | "neo4j";
+type Mode = "ingest" | "evaluate";
 
 export default function RuleIngestion() {
   const [mode, setMode] = useState<Mode>("ingest");
@@ -24,13 +24,13 @@ export default function RuleIngestion() {
         if (!ruleFiles.length) { toast.error("Select at least one rule document"); return; }
         const res = await api.ingestRules(ruleFiles);
         setRules(res.rules ?? []);
-        toast.success(`Extracted ${res.rules?.length ?? 0} rules`);
-      } else if (mode === "evaluate") {
-        const res = await api.evaluate({ rules: ruleFiles, inventory: inventoryFiles });
-        toast.success(`Evaluated ${res.devices?.length ?? 0} devices`);
+        toast.success(`Extracted ${res.rules?.length ?? 0} rules and pushed to Neo4j`);
       } else {
-        const res = await api.evaluateNeo4j({ rules: ruleFiles, inventory: inventoryFiles });
-        toast.success(`Neo4j evaluation completed: ${res.devices?.length ?? 0} devices`);
+        // "evaluate" — unified pipeline: extract rules → push to Neo4j → evaluate inventory
+        if (!ruleFiles.length) { toast.error("Select a rules file"); return; }
+        if (!inventoryFiles.length) { toast.error("Select an inventory file"); return; }
+        const res = await api.evaluate({ rules: ruleFiles, inventory: inventoryFiles });
+        toast.success(`Evaluated ${res.devices?.length ?? 0} devices · Knowledge graph updated`);
       }
     } catch (e) {
       setError((e as ApiError).message);
@@ -49,25 +49,24 @@ export default function RuleIngestion() {
 
       <div className="inline-flex rounded-md border border-border p-0.5 bg-card/50 flex-wrap">
         {([
-          { v: "ingest", l: "Ingest Rules", e: "POST /ingest-rules" },
-          { v: "evaluate", l: "Full Evaluate", e: "POST /evaluate" },
-          { v: "neo4j", l: "Neo4j Evaluate", e: "POST /evaluate-neo4j" },
-        ] as { v: Mode; l: string; e: string }[]).map((t) => (
-          <button key={t.v} onClick={() => setMode(t.v)} className={cn("px-3 h-9 rounded text-[12px] font-medium", mode === t.v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
-            {t.l}
-            <span className="hidden md:inline ml-2 font-mono text-[10px] opacity-70">{t.e}</span>
+          { v: "ingest",   l: "Ingest Rules",      e: "POST /ingest-rules", desc: "Extract & push rules to Neo4j" },
+          { v: "evaluate", l: "Evaluate + Graph",   e: "POST /evaluate",     desc: "Evaluate inventory · syncs Neo4j" },
+        ] as { v: Mode; l: string; e: string; desc: string }[]).map((t) => (
+          <button key={t.v} onClick={() => setMode(t.v)} className={cn("px-3 h-9 rounded text-[12px] font-medium flex flex-col items-start", mode === t.v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+            <span>{t.l}</span>
+            <span className="hidden md:inline font-mono text-[10px] opacity-70">{t.e}</span>
           </button>
         ))}
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
         <FileDrop label="Compatibility Rule Documents" hint="PDF, TXT, or JSON" files={ruleFiles} onChange={setRuleFiles} accept=".pdf,.txt,.json,application/json,application/pdf" />
-        {mode !== "ingest" && (<FileDrop label="Inventory Files" hint="JSON inventory dump(s)" files={inventoryFiles} onChange={setInventoryFiles} accept=".json,application/json" />)}
+        {mode === "evaluate" && (<FileDrop label="Inventory Files" hint="JSON inventory dump(s)" files={inventoryFiles} onChange={setInventoryFiles} accept=".json,application/json" />)}
       </div>
 
       <button onClick={submit} disabled={busy} className="inline-flex items-center gap-2 h-10 px-5 rounded-md bg-primary text-primary-foreground text-[13px] font-medium hover:bg-primary/90 disabled:opacity-60 glow-primary">
         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
-        Run {mode === "ingest" ? "Ingestion" : mode === "evaluate" ? "Full Evaluation" : "Neo4j Evaluation"}
+        {mode === "ingest" ? "Extract & Push to Neo4j" : "Run Full Evaluation"}
       </button>
 
       {error && (

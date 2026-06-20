@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -370,25 +371,63 @@ def evaluate_from_files(
     inventory_file: UploadFile = File(...),
 ):
     """
-    Upload a rules file (.txt or .pdf) and inventory file (.json).
-    Returns compliance reports wrapped as { devices: [...] }.
+    Unified evaluation pipeline:
+      1. Extract compliance rules from the uploaded rules file.
+      2. Push extracted rules (nodes + relationships) to Neo4j so the
+         knowledge graph stays in sync after every evaluation.
+      3. Run inventory evaluation against the extracted graph.
+      4. Cache results in-memory for /evaluate-inventory to serve.
+      5. Return compliance reports as { devices: [...] }.
+
+    Accepts: rules_file (.txt / .pdf), inventory_file (.json)
     """
+    # Step 1 — parse rules
     rules_path = _save_upload_to_tempfile(rules_file)
     try:
         graph = extract_rules_from_file(str(rules_path))
     finally:
         rules_path.unlink(missing_ok=True)
 
+    # Step 2 — push to Neo4j (keeps the knowledge graph up-to-date)
+    try:
+        with Neo4jClient() as db:
+            db.verify_connection()
+            db.clear_graph()
+            db.push_graph(graph)
+            db.save_metadata({
+                "ruleset_name": rules_file.filename or "Unknown Ruleset",
+                "uploaded_at": datetime.utcnow().isoformat() + "Z",
+                "node_count": len(graph.nodes),
+                "relationship_count": len(graph.relationships),
+            })
+    except Exception:
+        # Non-fatal: evaluation can still proceed even if Neo4j is unavailable
+        pass
+
+    # Step 3 — evaluate inventory
     inventory = _load_inventory_json_from_upload(inventory_file)
     clear_reports()
-
     reports = evaluate_inventory(graph, inventory)
 
+    # Step 4 — cache results
     for report, inv_item in zip(reports, inventory):
         register_report(report, inventory_item=inv_item)
 
+    # Step 5 — return
     pairs = get_all_reports_with_inventory()
     return _reports_to_response(pairs)
+
+
+@app.post("/evaluate-neo4j", response_model=EvaluationResponseOut)
+def evaluate_neo4j_alias(
+    rules_file: UploadFile = File(...),
+    inventory_file: UploadFile = File(...),
+):
+    """
+    Alias for POST /evaluate — kept for backwards compatibility.
+    Both endpoints now execute the same unified pipeline (extract → Neo4j → evaluate).
+    """
+    return evaluate_from_files(rules_file=rules_file, inventory_file=inventory_file)
 
 
 @app.post("/evaluate-json", response_model=EvaluationResponseOut)
@@ -402,32 +441,6 @@ def evaluate_from_json(payload: EvaluateRequest):
     reports = evaluate_inventory(payload.graph, payload.inventory)
 
     for report, inv_item in zip(reports, payload.inventory):
-        register_report(report, inventory_item=inv_item)
-
-    pairs = get_all_reports_with_inventory()
-    return _reports_to_response(pairs)
-
-
-@app.post("/evaluate-neo4j", response_model=EvaluationResponseOut)
-def evaluate_from_rules_and_inventory_files(
-    rules_file: UploadFile = File(...),
-    inventory_file: UploadFile = File(...),
-):
-    """
-    Same as /evaluate but explicitly exposes the Neo4j-backed path.
-    """
-    rules_path = _save_upload_to_tempfile(rules_file)
-    try:
-        graph = extract_rules_from_file(str(rules_path))
-    finally:
-        rules_path.unlink(missing_ok=True)
-
-    inventory = _load_inventory_json_from_upload(inventory_file)
-    clear_reports()
-
-    reports = evaluate_inventory(graph, inventory)
-
-    for report, inv_item in zip(reports, inventory):
         register_report(report, inventory_item=inv_item)
 
     pairs = get_all_reports_with_inventory()
@@ -613,3 +626,144 @@ def debug_cache():
         "count": count_reports(),
         "device_ids": list_report_ids(),
     }
+
+
+# ── Pydantic model for /simulate request ──────────────────────────────────────
+
+class SimulateRequest(BaseModel):
+    component: str = Field(description="Base component name or current version (e.g. 'BIOS', 'BIOS 1.6.2', 'Windows 11')")
+    target_version: str = Field(default="", description="Target version to simulate upgrading to (e.g. '2.0.0', '24H2'). Leave empty to query the component as-is.")
+
+
+@app.post("/simulate")
+def simulate_change_endpoint(request: SimulateRequest):
+    """
+    What-If Simulator — dedicated REST endpoint.
+
+    Simulates the impact of upgrading/changing a component to a target version.
+    Queries the Neo4j knowledge graph for:
+      - REQUIRES rules (what must also change)
+      - CONFLICTS_WITH / WARNS_AGAINST rules (blockers / advisories)
+      - COMPATIBLE_WITH / RECOMMENDS (positive signals)
+    Then cross-references the in-memory device report cache to show which
+    already-evaluated devices are affected and by how many critical/warning findings.
+
+    Returns a structured result that the frontend renders as a rich visual diff.
+    """
+    from src.agent.tools.change_planning_tool import (
+        _planned_component_id,
+        _find_relevant_findings,
+        _format_rule,
+        _rule_priority,
+    )
+
+    component = request.component.strip()
+    target_version = request.target_version.strip()
+    planned_component = _planned_component_id(component, target_version)
+
+    try:
+        with Neo4jClient() as db:
+            db.verify_connection()
+
+            # Try planned version node first, fall back to base component
+            context = db.get_component_context(planned_component)
+            used_component = planned_component
+            if context is None and planned_component != component:
+                context = db.get_component_context(component)
+                used_component = component
+
+            if context is None:
+                return {
+                    "found": False,
+                    "message": (
+                        f"No graph node found for '{component}'"
+                        + (f" (target version: {target_version})" if target_version else "")
+                        + ". Make sure rules have been ingested first."
+                    ),
+                }
+
+            outgoing_rules = list(context.get("outgoing_rules") or [])
+            incoming_rules = list(context.get("incoming_rules") or [])
+
+            direct_requirements: list[dict] = []
+            blockers: list[dict] = []
+            advisories: list[dict] = []
+            involved_terms: set[str] = {component, planned_component, used_component}
+
+            for rule in outgoing_rules:
+                relationship = str(rule.get("relationship", "")).upper().strip()
+                target = str(rule.get("target", "")).strip()
+                operator = str(rule.get("operator", "ANY")).strip()
+                min_version = rule.get("min_version")
+                if target:
+                    involved_terms.add(target)
+
+                summary = {
+                    "relationship": relationship,
+                    "target": target,
+                    "operator": operator,
+                    "min_version": min_version,
+                    "rule_text": _format_rule(rule),
+                }
+                if relationship == "REQUIRES":
+                    direct_requirements.append(summary)
+                elif relationship in {"CONFLICTS_WITH", "WARNS_AGAINST"}:
+                    blockers.append(summary)
+                else:
+                    advisories.append(summary)
+
+            for rule in incoming_rules:
+                source = str(rule.get("source", "")).strip()
+                if source:
+                    involved_terms.add(source)
+
+            direct_requirements.sort(key=lambda x: _rule_priority(str(x["relationship"])))
+            blockers.sort(key=lambda x: _rule_priority(str(x["relationship"])))
+            advisories.sort(key=lambda x: _rule_priority(str(x["relationship"])))
+
+            affected_devices = _find_relevant_findings(involved_terms)
+
+            blocker_count = len(blockers)
+            requirement_count = len(direct_requirements)
+            if blocker_count > 0:
+                risk_level = "HIGH"
+            elif requirement_count >= 3:
+                risk_level = "MEDIUM"
+            else:
+                risk_level = "LOW"
+
+            recommended_next_actions: list[str] = []
+            for rule in blockers[:3]:
+                recommended_next_actions.append(f"Resolve blocker: {rule['rule_text']}")
+            for rule in direct_requirements[:3]:
+                recommended_next_actions.append(f"Meet requirement: {rule['rule_text']}")
+            for rule in advisories[:2]:
+                recommended_next_actions.append(f"Review advisory: {rule['rule_text']}")
+
+            return {
+                "found": True,
+                "change_request": {
+                    "component": component,
+                    "target_version": target_version,
+                    "planned_component_id": planned_component,
+                    "graph_node_used": used_component,
+                },
+                "risk_level": risk_level,
+                "graph_context": {
+                    "component_id": context.get("component_id"),
+                    "component_type": context.get("component_type"),
+                    "direct_requirements": direct_requirements,
+                    "blockers": blockers,
+                    "advisories": advisories,
+                },
+                "impact_summary": {
+                    "devices_with_related_findings": len(affected_devices),
+                    "critical_devices": sum(1 for d in affected_devices if d["critical_findings"] > 0),
+                    "warning_devices": sum(1 for d in affected_devices if d["warning_findings"] > 0),
+                },
+                "affected_devices": affected_devices,
+                "recommended_next_actions": recommended_next_actions,
+            }
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
