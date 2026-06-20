@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -24,10 +25,10 @@ from src.agent.report_store import (
     get_all_reports,
     get_all_reports_with_inventory,
     get_inventory_for_device,
+    find_report,
 )
 from src.ingestion.file_parsers import parse_inventory_file
 from src.ingestion.normalizer import InventoryNormalizer
-from datetime import datetime
 
 # --------------- Vocabulary Cache ---------------
 _vocabulary_cache: set[str] | None = None
@@ -42,25 +43,6 @@ def _get_vocabulary() -> set[str]:
 def clear_vocabulary_cache() -> None:
     global _vocabulary_cache
     _vocabulary_cache = None
-
-from src.ingestion.file_parsers import parse_inventory_file
-from src.ingestion.normalizer import InventoryNormalizer
-from datetime import datetime
-
-_vocabulary_cache = None
-
-def _get_vocabulary() -> set[str]:
-    global _vocabulary_cache
-    if _vocabulary_cache is None:
-        with Neo4jClient() as db:
-            _vocabulary_cache = db.get_global_vocabulary()
-    return _vocabulary_cache
-
-def clear_vocabulary_cache():
-    global _vocabulary_cache
-    _vocabulary_cache = None
-
- 
 
 
 app = FastAPI(
@@ -376,6 +358,141 @@ def _reports_to_response(
     )
 
 
+# ---------- Script Generation ----------
+
+def _generate_powershell_script(report: DeviceComplianceReport, device_out: DeviceEvaluationOut) -> str:
+    """Generate a PowerShell remediation script from a compliance report."""
+    lines: list[str] = []
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+    lines += [
+        "#Requires -Version 5.1",
+        "# ============================================================",
+        f"#  ComplianceIQ — Remediation Script",
+        f"#  Device  : {report.device_id}",
+        f"#  Score   : {device_out.compliance_score}/100",
+        f"#  Generated: {now}",
+        "# ============================================================",
+        "# WARNING: Review each step carefully before executing.",
+        "# Run in an elevated PowerShell session (Run as Administrator).",
+        "",
+        'Write-Host "=== ComplianceIQ Remediation Script ===" -ForegroundColor Cyan',
+        f'Write-Host "Device: {report.device_id}" -ForegroundColor White',
+        f'Write-Host "Compliance Score: {device_out.compliance_score}/100" -ForegroundColor White',
+        'Write-Host ""',
+        "",
+    ]
+
+    for step in device_out.remediation:
+        step_num = step.order if step.order is not None else "?"
+        risk_color = "Red" if step.risk == "CRITICAL" else "Yellow" if step.risk == "WARNING" else "White"
+        lines += [
+            "# " + "─" * 60,
+            f"# STEP {step_num}: {step.action}",
+            f"# Risk: {step.risk or 'LOW'}  |  Est. Time: {step.estimated_time or 'N/A'}",
+            "# " + "─" * 60,
+            f'Write-Host ""',
+            f'Write-Host "STEP {step_num}: {step.action}" -ForegroundColor {risk_color}',
+        ]
+        if step.reason:
+            lines.append(f'Write-Host "  Reason: {step.reason}" -ForegroundColor DarkGray')
+        if step.target_version:
+            lines.append(f'Write-Host "  Target version: {step.target_version}" -ForegroundColor Cyan')
+
+        if step.sub_steps:
+            for sub in step.sub_steps:
+                lines.append(f'Write-Host "  [{sub.order}] {sub.description}" -ForegroundColor Gray')
+                if sub.warning:
+                    lines += [
+                        f'Write-Host "  ⚠ WARNING: {sub.warning}" -ForegroundColor Yellow',
+                    ]
+                if sub.note:
+                    lines.append(f'Write-Host "  ℹ NOTE: {sub.note}" -ForegroundColor DarkCyan')
+                if sub.command:
+                    lines += [
+                        "",
+                        f"  # Command for sub-step {sub.order}:",
+                        f"  {sub.command}",
+                        "",
+                    ]
+
+        lines += ["", 'Write-Host "  ✓ Step complete. Press Enter to continue..." -ForegroundColor Green',
+                  'Read-Host | Out-Null', ""]
+
+    lines += [
+        "",
+        'Write-Host "=== All remediation steps completed ===" -ForegroundColor Green',
+        'Write-Host "Re-run compliance evaluation to verify fixes." -ForegroundColor White',
+    ]
+    return "\r\n".join(lines)
+
+
+def _generate_bash_script(report: DeviceComplianceReport, device_out: DeviceEvaluationOut) -> str:
+    """Generate a Bash remediation script from a compliance report."""
+    lines: list[str] = []
+    now = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+
+    lines += [
+        "#!/usr/bin/env bash",
+        "# ============================================================",
+        "#  ComplianceIQ — Remediation Script",
+        f"#  Device  : {report.device_id}",
+        f"#  Score   : {device_out.compliance_score}/100",
+        f"#  Generated: {now}",
+        "# ============================================================",
+        "# WARNING: Review each step carefully before executing.",
+        "# Run with sudo if required: sudo bash <script>",
+        "",
+        "set -euo pipefail",
+        "",
+        'echo "\\033[0;36m=== ComplianceIQ Remediation Script ===\\033[0m"',
+        f'echo "Device: {report.device_id}"',
+        f'echo "Compliance Score: {device_out.compliance_score}/100"',
+        'echo ""',
+        "",
+    ]
+
+    for step in device_out.remediation:
+        step_num = step.order if step.order is not None else "?"
+        color = "\\033[0;31m" if step.risk == "CRITICAL" else "\\033[0;33m" if step.risk == "WARNING" else "\\033[0;37m"
+        lines += [
+            "# " + "─" * 60,
+            f"# STEP {step_num}: {step.action}",
+            f"# Risk: {step.risk or 'LOW'}  |  Est. Time: {step.estimated_time or 'N/A'}",
+            "# " + "─" * 60,
+            'echo ""',
+            f'echo "{color}STEP {step_num}: {step.action}\\033[0m"',
+        ]
+        if step.reason:
+            lines.append(f'echo "  Reason: {step.reason}"')
+        if step.target_version:
+            lines.append(f'echo "  Target version: {step.target_version}"')
+
+        if step.sub_steps:
+            for sub in step.sub_steps:
+                lines.append(f'echo "  [{sub.order}] {sub.description}"')
+                if sub.warning:
+                    lines.append(f'echo "  ⚠ WARNING: {sub.warning}"')
+                if sub.note:
+                    lines.append(f'echo "  ℹ NOTE: {sub.note}"')
+                if sub.command:
+                    lines += [
+                        "",
+                        f"  # Command for sub-step {sub.order}:",
+                        f"  {sub.command}",
+                        "",
+                    ]
+
+        lines += ["", 'read -p "  ✓ Step complete. Press Enter to continue..." _', ""]
+
+    lines += [
+        "",
+        'echo "\\033[0;32m=== All remediation steps completed ===\\033[0m"',
+        'echo "Re-run compliance evaluation to verify fixes."',
+    ]
+    return "\n".join(lines)
+
+
 # ---------- Endpoints ----------
 
 @app.get("/health")
@@ -401,15 +518,60 @@ def system_status():
     }
 
 
+@app.get("/devices/{device_id}/remediation-script")
+def get_remediation_script(device_id: str, format: str = "powershell"):
+    """
+    Generate a downloadable remediation script for a device from the cached report.
+    Query param: format = powershell (default) | bash
+    Returns a plain-text file download.
+    """
+    from fastapi.responses import PlainTextResponse
+
+    report = find_report(device_id)
+    if not report:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No cached report found for device '{device_id}'. Run an evaluation first.",
+        )
+
+    # Build the DeviceEvaluationOut to reuse the rich remediation logic
+    inv = get_inventory_for_device(report.device_id)
+    device_out = _report_to_device_out(report, inv)
+
+    fmt = format.lower().strip()
+    if fmt in ("bash", "sh", "linux"):
+        content = _generate_bash_script(report, device_out)
+        filename = f"remediation_{report.device_id.replace(' ', '_')}.sh"
+        media_type = "text/x-sh"
+    else:
+        content = _generate_powershell_script(report, device_out)
+        filename = f"remediation_{report.device_id.replace(' ', '_')}.ps1"
+        media_type = "text/plain"
+
+    return PlainTextResponse(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.post("/evaluate", response_model=EvaluationResponseOut)
 def evaluate_from_files(
     rules_file: UploadFile = File(...),
     inventory_file: UploadFile = File(...),
 ):
     """
-    Upload a rules file (.txt or .pdf) and inventory file (.json).
-    Returns compliance reports wrapped as { devices: [...] }.
+    Unified evaluation pipeline:
+      1. Extract compliance rules from the uploaded rules file.
+      2. Push extracted rules (nodes + relationships) to Neo4j so the
+         knowledge graph stays in sync after every evaluation.
+      3. Run inventory evaluation against the extracted graph.
+      4. Cache results in-memory for /evaluate-inventory to serve.
+      5. Return compliance reports as { devices: [...] }.
+
+    Accepts: rules_file (.txt / .pdf), inventory_file (.json)
     """
+    # Step 1 — parse rules
     rules_path = _save_upload_to_tempfile(rules_file)
     try:
         graph = extract_rules_from_file(str(rules_path))
@@ -419,15 +581,46 @@ def evaluate_from_files(
     raw_inventory = _load_inventory_json_from_upload(inventory_file)
     vocab = {node.id for node in graph.nodes}
     inventory = InventoryNormalizer().normalize(raw_inventory, vocab)
-    clear_reports()
+    # Step 2 — push to Neo4j (keeps the knowledge graph up-to-date)
+    try:
+        with Neo4jClient() as db:
+            db.verify_connection()
+            db.clear_graph()
+            db.push_graph(graph)
+            db.save_metadata({
+                "ruleset_name": rules_file.filename or "Unknown Ruleset",
+                "uploaded_at": datetime.utcnow().isoformat() + "Z",
+                "node_count": len(graph.nodes),
+                "relationship_count": len(graph.relationships),
+            })
+    except Exception:
+        # Non-fatal: evaluation can still proceed even if Neo4j is unavailable
+        pass
 
+    # Step 3 — evaluate inventory (reuse already-parsed + normalized inventory)
+    clear_reports()
     reports = evaluate_inventory(graph, inventory)
 
-    for report, inv_item in zip(reports, inventory):
+    # Step 4 — cache results
+    for report, inv_item in zip(reports, raw_inventory):
         register_report(report, inventory_item=inv_item)
 
+    # Step 5 — return
     pairs = get_all_reports_with_inventory()
+
     return _reports_to_response(pairs)
+
+
+@app.post("/evaluate-neo4j", response_model=EvaluationResponseOut)
+def evaluate_neo4j_alias(
+    rules_file: UploadFile = File(...),
+    inventory_file: UploadFile = File(...),
+):
+    """
+    Alias for POST /evaluate — kept for backwards compatibility.
+    Both endpoints now execute the same unified pipeline (extract → Neo4j → evaluate).
+    """
+    return evaluate_from_files(rules_file=rules_file, inventory_file=inventory_file)
 
 
 @app.post("/evaluate-json", response_model=EvaluationResponseOut)
@@ -449,61 +642,16 @@ def evaluate_from_json(payload: EvaluateRequest):
     return _reports_to_response(pairs)
 
 
-@app.post("/evaluate-neo4j", response_model=EvaluationResponseOut)
-def evaluate_from_rules_and_inventory_files(
-    rules_file: UploadFile = File(...),
-    inventory_file: UploadFile = File(...),
-):
-    """
-    Same as /evaluate but explicitly exposes the Neo4j-backed path.
-    """
-    rules_path = _save_upload_to_tempfile(rules_file)
-    try:
-        graph = extract_rules_from_file(str(rules_path))
-    finally:
-        rules_path.unlink(missing_ok=True)
 
-    raw_inventory = _load_inventory_json_from_upload(inventory_file)
-    vocab = {node.id for node in graph.nodes}
-    inventory = InventoryNormalizer().normalize(raw_inventory, vocab)
-    clear_reports()
 
-    reports = evaluate_inventory(graph, inventory)
-
-    for report, inv_item in zip(reports, inventory):
-        register_report(report, inventory_item=inv_item)
-
-    pairs = get_all_reports_with_inventory()
-    return _reports_to_response(pairs)
 
 
 @app.post("/evaluate-inventory", response_model=EvaluationResponseOut)
-def evaluate_inventory_only(inventory_file: UploadFile = File(...)):
+def evaluate_inventory_cached_post():
     """
-    Evaluate an inventory file (JSON/CSV/XLSX) against the active Neo4j graph.
-    The normalization layer converts heterogeneous formats into the canonical schema.
+    Return cached compliance results. No re-evaluation is performed.
+    Called by Fleet Overview on load (POST with no body).
     """
-    inv_path = _save_upload_to_tempfile(inventory_file)
-    try:
-        raw_inventory = parse_inventory_file(str(inv_path))
-    except Exception as exc:
-        inv_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail=f"Invalid inventory file: {exc}")
-    finally:
-        inv_path.unlink(missing_ok=True)
-
-    vocab = _get_vocabulary()
-    inventory = InventoryNormalizer().normalize(raw_inventory, vocab)
-    clear_reports()
-
-    try:
-        reports = evaluate_inventory_from_db(inventory)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-    for report, inv_item in zip(reports, inventory):
-        register_report(report, inventory_item=inv_item)
-
     pairs = get_all_reports_with_inventory()
     return _reports_to_response(pairs)
 
@@ -577,34 +725,8 @@ def ingest_rules_only(rules_file: UploadFile = File(...)):
         )
 
 
-@app.post("/evaluate-inventory", response_model=list[DeviceComplianceReport])
-def evaluate_inventory_only(inventory_file: UploadFile = File(...)):
-    """
-    Evaluate an inventory file using the active graph stored in Neo4j.
-    """
-    inv_path = _save_upload_to_tempfile(inventory_file)
 
-    try:
-        raw_inventory = parse_inventory_file(str(inv_path))
-    except Exception as exc:
-        inv_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail=f"Invalid inventory file: {exc}")
-    finally:
-        inv_path.unlink(missing_ok=True)
 
-    clear_reports()
-
-    try:
-        vocab = _get_vocabulary()
-        inventory = InventoryNormalizer().normalize(raw_inventory, vocab)
-        reports = evaluate_inventory_from_db(inventory)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-    for report in reports:
-        register_report(report)
-
-    return reports
 
 
 @app.get("/graph/full")
@@ -618,33 +740,6 @@ def get_full_graph():
         raise HTTPException(status_code=500, detail=str(exc))
 
 
- 
-@app.post("/evaluate-neo4j", response_model=list[DeviceComplianceReport])
-def evaluate_from_rules_and_inventory_files(
-    rules_file: UploadFile = File(...),
-    inventory_file: UploadFile = File(...),
-):
-    """
-    Same as /evaluate, but explicitly exposes the Neo4j-backed path.
-    """
-    rules_path = _save_upload_to_tempfile(rules_file)
-    try:
-        graph = extract_rules_from_file(str(rules_path))
-    finally:
-        rules_path.unlink(missing_ok=True)
-
-    raw_inventory = _load_inventory_json_from_upload(inventory_file)
-    vocab = {node.id for node in graph.nodes}
-    inventory = InventoryNormalizer().normalize(raw_inventory, vocab)
-    clear_reports()
-
-    reports = evaluate_inventory(graph, inventory)
-
-    for report in reports:
-        register_report(report)
-
-    return reports
- 
 @app.get("/graph/network")
 def get_graph_network():
     """
@@ -746,3 +841,144 @@ def debug_cache():
         "count": count_reports(),
         "device_ids": list_report_ids(),
     }
+
+
+# ── Pydantic model for /simulate request ──────────────────────────────────────
+
+class SimulateRequest(BaseModel):
+    component: str = Field(description="Base component name or current version (e.g. 'BIOS', 'BIOS 1.6.2', 'Windows 11')")
+    target_version: str = Field(default="", description="Target version to simulate upgrading to (e.g. '2.0.0', '24H2'). Leave empty to query the component as-is.")
+
+
+@app.post("/simulate")
+def simulate_change_endpoint(request: SimulateRequest):
+    """
+    What-If Simulator — dedicated REST endpoint.
+
+    Simulates the impact of upgrading/changing a component to a target version.
+    Queries the Neo4j knowledge graph for:
+      - REQUIRES rules (what must also change)
+      - CONFLICTS_WITH / WARNS_AGAINST rules (blockers / advisories)
+      - COMPATIBLE_WITH / RECOMMENDS (positive signals)
+    Then cross-references the in-memory device report cache to show which
+    already-evaluated devices are affected and by how many critical/warning findings.
+
+    Returns a structured result that the frontend renders as a rich visual diff.
+    """
+    from src.agent.tools.change_planning_tool import (
+        _planned_component_id,
+        _find_relevant_findings,
+        _format_rule,
+        _rule_priority,
+    )
+
+    component = request.component.strip()
+    target_version = request.target_version.strip()
+    planned_component = _planned_component_id(component, target_version)
+
+    try:
+        with Neo4jClient() as db:
+            db.verify_connection()
+
+            # Try planned version node first, fall back to base component
+            context = db.get_component_context(planned_component)
+            used_component = planned_component
+            if context is None and planned_component != component:
+                context = db.get_component_context(component)
+                used_component = component
+
+            if context is None:
+                return {
+                    "found": False,
+                    "message": (
+                        f"No graph node found for '{component}'"
+                        + (f" (target version: {target_version})" if target_version else "")
+                        + ". Make sure rules have been ingested first."
+                    ),
+                }
+
+            outgoing_rules = list(context.get("outgoing_rules") or [])
+            incoming_rules = list(context.get("incoming_rules") or [])
+
+            direct_requirements: list[dict] = []
+            blockers: list[dict] = []
+            advisories: list[dict] = []
+            involved_terms: set[str] = {component, planned_component, used_component}
+
+            for rule in outgoing_rules:
+                relationship = str(rule.get("relationship", "")).upper().strip()
+                target = str(rule.get("target", "")).strip()
+                operator = str(rule.get("operator", "ANY")).strip()
+                min_version = rule.get("min_version")
+                if target:
+                    involved_terms.add(target)
+
+                summary = {
+                    "relationship": relationship,
+                    "target": target,
+                    "operator": operator,
+                    "min_version": min_version,
+                    "rule_text": _format_rule(rule),
+                }
+                if relationship == "REQUIRES":
+                    direct_requirements.append(summary)
+                elif relationship in {"CONFLICTS_WITH", "WARNS_AGAINST"}:
+                    blockers.append(summary)
+                else:
+                    advisories.append(summary)
+
+            for rule in incoming_rules:
+                source = str(rule.get("source", "")).strip()
+                if source:
+                    involved_terms.add(source)
+
+            direct_requirements.sort(key=lambda x: _rule_priority(str(x["relationship"])))
+            blockers.sort(key=lambda x: _rule_priority(str(x["relationship"])))
+            advisories.sort(key=lambda x: _rule_priority(str(x["relationship"])))
+
+            affected_devices = _find_relevant_findings(involved_terms)
+
+            blocker_count = len(blockers)
+            requirement_count = len(direct_requirements)
+            if blocker_count > 0:
+                risk_level = "HIGH"
+            elif requirement_count >= 3:
+                risk_level = "MEDIUM"
+            else:
+                risk_level = "LOW"
+
+            recommended_next_actions: list[str] = []
+            for rule in blockers[:3]:
+                recommended_next_actions.append(f"Resolve blocker: {rule['rule_text']}")
+            for rule in direct_requirements[:3]:
+                recommended_next_actions.append(f"Meet requirement: {rule['rule_text']}")
+            for rule in advisories[:2]:
+                recommended_next_actions.append(f"Review advisory: {rule['rule_text']}")
+
+            return {
+                "found": True,
+                "change_request": {
+                    "component": component,
+                    "target_version": target_version,
+                    "planned_component_id": planned_component,
+                    "graph_node_used": used_component,
+                },
+                "risk_level": risk_level,
+                "graph_context": {
+                    "component_id": context.get("component_id"),
+                    "component_type": context.get("component_type"),
+                    "direct_requirements": direct_requirements,
+                    "blockers": blockers,
+                    "advisories": advisories,
+                },
+                "impact_summary": {
+                    "devices_with_related_findings": len(affected_devices),
+                    "critical_devices": sum(1 for d in affected_devices if d["critical_findings"] > 0),
+                    "warning_devices": sum(1 for d in affected_devices if d["warning_findings"] > 0),
+                },
+                "affected_devices": affected_devices,
+                "recommended_next_actions": recommended_next_actions,
+            }
+
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

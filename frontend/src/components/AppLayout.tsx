@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutGrid,
   Network,
   FileStack,
   MessagesSquare,
-  Activity,
   Search,
   Menu,
   X,
   ServerCog,
+  Zap,
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
@@ -17,11 +17,11 @@ import { api, API_BASE_URL } from "@/lib/api";
 import { ThemeToggle } from "./ThemeToggle";
 
 const navItems = [
-  { to: "/", label: "Fleet Overview", icon: LayoutGrid, end: true },
-  { to: "/graph", label: "Knowledge Graph", icon: Network },
-  { to: "/rules", label: "Rule Ingestion", icon: FileStack },
-  { to: "/assistant", label: "AI Assistant", icon: MessagesSquare, ai: true },
-  { to: "/status", label: "System Status", icon: Activity },
+  { to: "/",        label: "Fleet Overview",   icon: LayoutGrid,    end: true },
+  { to: "/graph",   label: "Knowledge Graph",  icon: Network },
+  { to: "/simulate",label: "What-If Simulator", icon: Zap },
+  { to: "/rules",   label: "Rule Management",  icon: FileStack },
+  { to: "/assistant",label: "AI Assistant",    icon: MessagesSquare, ai: true },
 ];
 
 function useBackendHealth() {
@@ -139,10 +139,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex-1 md:flex-none" />
           <div className="flex items-center gap-2">
-            <Link
-              to="/status"
-              className="hidden sm:flex items-center gap-2 px-2.5 h-9 rounded-md border border-border bg-card/50 hover:bg-card text-[11px] font-mono uppercase tracking-wider text-muted-foreground"
-            >
+            <div className="hidden sm:flex items-center gap-2 px-2.5 h-9 rounded-md border border-border bg-card/50 text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
               <ServerCog className="h-3.5 w-3.5" />
               <span>
                 Engine{" "}
@@ -158,7 +155,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   {health === true ? "OK" : health === false ? "DOWN" : "…"}
                 </span>
               </span>
-            </Link>
+            </div>
             <ThemeToggle />
           </div>
         </header>

@@ -166,7 +166,66 @@ export interface ChatResponse {
   tools_used?: string[];
 }
 
-// ---------- Endpoints ----------
+
+// ---------- Simulate / What-If types ----------
+export interface SimulateRule {
+  relationship: string;
+  target?: string;
+  source?: string;
+  operator?: string;
+  min_version?: string | null;
+  rule_text: string;
+}
+
+export interface SimulateAffectedFinding {
+  severity: string;
+  rule_type: string;
+  source: string;
+  target: string;
+  message: string;
+  remediation?: {
+    component: string;
+    action: string;
+    target_version?: string;
+    reason: string;
+  } | null;
+}
+
+export interface SimulateAffectedDevice {
+  device_id: string;
+  is_compliant: boolean;
+  compliance_score: number;
+  critical_findings: number;
+  warning_findings: number;
+  relevant_findings: SimulateAffectedFinding[];
+}
+
+export interface SimulateResult {
+  found: boolean;
+  message?: string;
+  change_request?: {
+    component: string;
+    target_version: string;
+    planned_component_id: string;
+    graph_node_used: string;
+  };
+  risk_level?: "HIGH" | "MEDIUM" | "LOW";
+  graph_context?: {
+    component_id: string;
+    component_type: string;
+    direct_requirements: SimulateRule[];
+    blockers: SimulateRule[];
+    advisories: SimulateRule[];
+  };
+  impact_summary?: {
+    devices_with_related_findings: number;
+    critical_devices: number;
+    warning_devices: number;
+  };
+  affected_devices?: SimulateAffectedDevice[];
+  recommended_next_actions?: string[];
+}
+
 export const api = {
   health: () => request<{ status: string }>("/health"),
   systemStatus: () => request<SystemStatus>("/system/status"),
@@ -202,11 +261,11 @@ export const api = {
 
   /**
    * POST /evaluate (multipart)
+   * Unified pipeline: parse rules → push to Neo4j → evaluate inventory → cache.
    * Backend field names: rules_file, inventory_file
    */
   evaluate: (files: { rules?: File[]; inventory?: File[] }) => {
     const fd = new FormData();
-    // Backend expects single files named rules_file / inventory_file
     if (files.rules?.[0]) fd.append("rules_file", files.rules[0]);
     if (files.inventory?.[0]) fd.append("inventory_file", files.inventory[0]);
     return request<EvaluationResponse>("/evaluate", { method: "POST", body: fd });
@@ -223,15 +282,15 @@ export const api = {
   },
 
   /**
-   * POST /evaluate-neo4j (multipart)
-   * Backend field names: rules_file, inventory_file
+   * POST /simulate
+   * What-If simulator: given a component + target version, returns risk level,
+   * graph rules (requirements / blockers / advisories), and affected devices.
    */
-  evaluateNeo4j: (files: { rules?: File[]; inventory?: File[] }) => {
-    const fd = new FormData();
-    if (files.rules?.[0]) fd.append("rules_file", files.rules[0]);
-    if (files.inventory?.[0]) fd.append("inventory_file", files.inventory[0]);
-    return request<EvaluationResponse>("/evaluate-neo4j", { method: "POST", body: fd });
-  },
+  simulate: (payload: { component: string; target_version?: string }) =>
+    request<SimulateResult>("/simulate", {
+      method: "POST",
+      body: JSON.stringify({ component: payload.component, target_version: payload.target_version ?? "" }),
+    }),
 
   /**
    * POST /chat
@@ -246,4 +305,18 @@ export const api = {
         session_id: payload.session_id ?? "default",
       }),
     }),
+
+  /**
+   * GET /devices/{device_id}/remediation-script?format=powershell|bash
+   * Triggers a browser file download of the generated script.
+   */
+  downloadRemediationScript: (deviceId: string, format: "powershell" | "bash") => {
+    const url = `${API_BASE_URL}/devices/${encodeURIComponent(deviceId)}/remediation-script?format=${format}`;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `remediation_${deviceId}.${format === "bash" ? "sh" : "ps1"}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  },
 };
