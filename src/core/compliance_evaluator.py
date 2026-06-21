@@ -28,7 +28,7 @@ def _build_inventory_indexes(
 
         installed_versions_by_name[name] = version
         inventory_component_names.add(name)
-        
+
         installed_entity_ids.add(name)
         installed_entity_ids.add(version)
         installed_entity_ids.add(f"{name} {version}")
@@ -49,10 +49,10 @@ def _version_key(value: str) -> tuple:
 
 def _compare_versions(installed: str, operator: str, required: str) -> bool:
     installed_key = _version_key(installed)
-    
+
     # Split required string by common delimiters to handle lists of versions (e.g. "4.11 and 4.12")
     required_parts = [p.strip() for p in re.split(r'\s+and\s+|\s+or\s+|,', str(required).strip(), flags=re.IGNORECASE) if p.strip()]
-    
+
     if not required_parts:
         return True
 
@@ -60,7 +60,7 @@ def _compare_versions(installed: str, operator: str, required: str) -> bool:
         return any(installed_key == _version_key(p) for p in required_parts)
     if operator == "!=":
         return all(installed_key != _version_key(p) for p in required_parts)
-    
+
     for part in required_parts:
         required_key = _version_key(part)
         if operator == ">=" and installed_key >= required_key: return True
@@ -71,15 +71,52 @@ def _compare_versions(installed: str, operator: str, required: str) -> bool:
     return False
 
 
-def _get_generic_name(node_id: str, node_type: str, valid_component_names: set[str]) -> str:
-    if node_id in valid_component_names:
-        return node_id
-    if node_type in valid_component_names:
+def _get_generic_name(node_id: str, node_type: str, valid_component_names: set[str], installed_versions_by_name: dict[str, str] | None = None) -> str:
+    """
+    Try to resolve a possibly-versioned node id (e.g. "Windows 11 24H2") or free-form id
+    to one of the known component names present in valid_component_names or the
+    inventory (installed_versions_by_name). This makes the evaluator robust when
+    rules refer to specific versions while inventory stores components under a
+    generic component name.
+    """
+    nid = (node_id or "").strip()
+    if not nid:
+        return nid
+
+    # 1. Exact match
+    if nid in valid_component_names:
+        return nid
+
+    # 2. If node_type directly matches a known component
+    if node_type and node_type in valid_component_names:
         return node_type
-    for generic in sorted(valid_component_names, key=len, reverse=True):
-        if node_id.startswith(generic):
+
+    lower_nid = nid.lower()
+
+    # 3. If any known component name appears inside the node id (case-insensitive)
+    for generic in valid_component_names:
+        if generic and generic.lower() in lower_nid:
             return generic
-    return node_id
+
+    # 4. If inventory mapping provided, match on observed version values
+    if installed_versions_by_name:
+        for comp_name, comp_version in installed_versions_by_name.items():
+            if not comp_version:
+                continue
+            lv = comp_version.lower()
+            # If the rule mentions the exact version string or vice-versa
+            if lv and (lv in lower_nid or lower_nid in lv):
+                return comp_name
+            # If comp name appears in the node id
+            if comp_name.lower() in lower_nid:
+                return comp_name
+
+    # 5. Fallback: if node_id startswith some generic component (legacy behaviour)
+    for generic in sorted(valid_component_names, key=len, reverse=True):
+        if nid.startswith(generic):
+            return generic
+
+    return nid
 
 
 def _build_reremediation(
@@ -125,26 +162,30 @@ def _evaluate_relationship(
     operator = str(rel.get("operator", "ANY")).strip()
     min_version = rel.get("min_version")
 
-    source_generic = _get_generic_name(source_id, "", valid_component_names)
-    target_generic = _get_generic_name(target_id, target_type, valid_component_names)
+    # Resolve generics using installed_versions_by_name so versioned node ids map
+    source_generic = _get_generic_name(source_id, "", valid_component_names, installed_versions_by_name)
+    target_generic = _get_generic_name(target_id, target_type, valid_component_names, installed_versions_by_name)
 
+    # If the source generic is not installed, the relationship does not apply
     if source_generic not in installed_versions_by_name:
         return False, None
 
+    # If source_id is a specific node not equal to generic and not present in ids, rule doesn't apply
     if source_id != source_generic and source_id not in installed_entity_ids:
         return False, None
 
+    # If target specific id not generic and not present in ids, rule may or may not apply depending on type
     if target_id != target_generic and target_id not in installed_entity_ids:
         if rel_type != "REQUIRES" or target_generic in installed_versions_by_name:
             return False, None
 
     target_for_version_check = target_generic
     is_inverted_constraint = False
-    
+
     if min_version is not None:
         source_is_generic = source_id in valid_component_names
         target_is_generic = target_id in valid_component_names
-        
+
         if source_is_generic and not target_is_generic:
             target_for_version_check = source_generic
             is_inverted_constraint = True
@@ -347,7 +388,7 @@ def evaluate_device(
     global_component_vocabulary: set[str],
 ) -> DeviceComplianceReport:
     device_id = str(device_inventory.get("device_id", "unknown-device"))
-    
+
     installed_entity_ids, installed_versions_by_name, inventory_names = _build_inventory_indexes(device_inventory)
     valid_component_names = global_component_vocabulary.union(inventory_names)
 
@@ -385,7 +426,7 @@ def evaluate_device(
         )
         if is_any_satisfied:
             continue
-        
+
         for rel, (is_applicable, finding) in results:
             if is_applicable and finding is not None:
                 finding_key = tuple(sorted([finding.source, finding.target]) + [finding.rule_type])
@@ -405,6 +446,20 @@ def evaluate_device(
             findings.append(finding)
 
     total_installed = len(installed_versions_by_name)
+
+    # Compute which components were actually covered by the rules we considered
+    components_covered_by_rules: set[str] = set()
+    for rel in relevant_relationships:
+        for role in ("source_id", "target_id"):
+            node = str(rel.get(role, "")).strip()
+            if not node:
+                continue
+            # pass target_type for target_id, empty for source
+            node_type = str(rel.get("target_type", "")) if role == "target_id" else ""
+            gen = _get_generic_name(node, node_type, valid_component_names, installed_versions_by_name)
+            if gen in installed_versions_by_name:
+                components_covered_by_rules.add(gen)
+
     total_checked = len(components_covered_by_rules)
 
     critical_count = sum(1 for f in findings if f.severity == "CRITICAL")
@@ -438,7 +493,7 @@ def evaluate_inventory(
         if hasattr(edge, "source_id") and edge.source_id:
             src_clean = re.sub(r"[\d\.\s>=<!]+", "", str(edge.source_id)).strip()
             if src_clean: global_component_vocabulary.add(src_clean)
-            
+
         if hasattr(edge, "target_id") and edge.target_id:
             tgt_clean = re.sub(r"[\d\.\s>=<!]+", "", str(edge.target_id)).strip()
             if tgt_clean: global_component_vocabulary.add(tgt_clean)
@@ -450,7 +505,7 @@ def evaluate_inventory(
 
         all_unique_installed_entities: set[str] = set()
         device_cached_indexes: list[tuple[dict[str, Any], set[str]]] = []
-        
+
         for device in inventory:
             entity_ids, _, _ = _build_inventory_indexes(device)
             all_unique_installed_entities.update(entity_ids)
@@ -475,10 +530,10 @@ def evaluate_inventory_from_db(
 
     with Neo4jClient() as db:
         db.verify_connection()
-        
+
         full_graph = db.get_full_graph()
         global_component_vocabulary: set[str] = set()
-        
+
         for edge in full_graph:
             for attr in ("source_type", "source_label", "source_node_type"):
                 if attr in edge and edge[attr]:
@@ -490,14 +545,14 @@ def evaluate_inventory_from_db(
             if "source_id" in edge and edge["source_id"]:
                 src_clean = re.sub(r"[\d\.\s>=<!]+", "", str(edge["source_id"])).strip()
                 if src_clean: global_component_vocabulary.add(src_clean)
-                
+
             if "target_id" in edge and edge["target_id"]:
                 tgt_clean = re.sub(r"[\d\.\s>=<!]+", "", str(edge["target_id"])).strip()
                 if tgt_clean: global_component_vocabulary.add(tgt_clean)
 
         all_unique_installed_entities: set[str] = set()
         device_cached_indexes: list[tuple[dict[str, Any], set[str]]] = []
-        
+
         for device in inventory:
             entity_ids, _, _ = _build_inventory_indexes(device)
             all_unique_installed_entities.update(entity_ids)
