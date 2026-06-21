@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { api, ApiError, ChatResponse } from "@/lib/api";
 import { Sparkles, Send, Loader2, User, Trash2 } from "lucide-react";
@@ -6,9 +6,13 @@ import { cn } from "@/lib/utils";
 
 type Msg = { role: "user" | "assistant"; content: string; tools?: string[] };
 const STORAGE_KEY = "complianceiq.chat.history";
-const SESSION_ID  = "frontend-session";
+const SESSION_ID_KEY = "complianceiq.chat.session";
 
 export default function Assistant() {
+  const [sessionId, setSessionId] = useState(() => {
+    if (typeof window === "undefined") return "session-" + Math.random().toString(36).substring(2, 9);
+    return sessionStorage.getItem(SESSION_ID_KEY) || "session-" + Math.random().toString(36).substring(2, 9);
+  });
   const [messages, setMessages] = useState<Msg[]>(() => {
     if (typeof window === "undefined") return [];
     try { const raw = sessionStorage.getItem(STORAGE_KEY); return raw ? (JSON.parse(raw) as Msg[]) : []; } catch { return []; }
@@ -21,8 +25,9 @@ export default function Assistant() {
 
   useEffect(() => {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    sessionStorage.setItem(SESSION_ID_KEY, sessionId);
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, sessionId]);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
@@ -35,7 +40,7 @@ export default function Assistant() {
     setBusy(true);
     setError(null);
     try {
-      const res: ChatResponse = await api.chat({ question: text, session_id: SESSION_ID });
+      const res: ChatResponse = await api.chat({ question: text, session_id: sessionId });
       setMessages((m) => [...m, { role: "assistant", content: res.answer ?? "(no response)", tools: res.tools_used }]);
     } catch (e) {
       setError((e as ApiError).message);
@@ -47,7 +52,9 @@ export default function Assistant() {
 
   const clearHistory = () => {
     setMessages([]);
+    setSessionId("session-" + Math.random().toString(36).substring(2, 9));
     sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(SESSION_ID_KEY);
   };
 
   return (

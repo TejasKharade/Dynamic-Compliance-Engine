@@ -15,3 +15,5 @@ openpyxl
 openpyxl
 python-multipart
 rapidfuzz
+faiss-cpu
+tiktoken

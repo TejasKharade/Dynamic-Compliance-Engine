@@ -10,6 +10,7 @@ import {
   X,
   ServerCog,
   Zap,
+  ShieldCheck,
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
@@ -21,8 +22,10 @@ const navItems = [
   { to: "/graph",   label: "Knowledge Graph",  icon: Network },
   { to: "/simulate",label: "What-If Simulator", icon: Zap },
   { to: "/rules",   label: "Rule Management",  icon: FileStack },
+  { to: "/policy",  label: "Policy Compliance", icon: ShieldCheck },
   { to: "/assistant",label: "AI Assistant",    icon: MessagesSquare, ai: true },
 ];
+
 
 function useBackendHealth() {
   const [ok, setOk] = useState<boolean | null>(null);

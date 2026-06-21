@@ -48,7 +48,7 @@ RETURN r
 # DETACH DELETE removes all nodes AND all their relationships.
 # -----------------------------------------------------------------------------
 CLEAR_GRAPH_QUERY = """
-MATCH (n) DETACH DELETE n
+MATCH (n:ComplianceEntity) DETACH DELETE n
 """
 
 # -----------------------------------------------------------------------------
@@ -189,3 +189,75 @@ GET_GLOBAL_VOCABULARY_QUERY = """
 MATCH (n:ComplianceEntity)
 RETURN DISTINCT n.id AS name
 """
+
+# =============================================================================
+# PRODUCT POLICY GRAPH CYPHER QUERIES
+# =============================================================================
+
+MERGE_POLICY_NODE_QUERY = """
+MERGE (n:PolicyEntity {id: $id})
+SET n.type = $type
+SET n:{type}
+RETURN n
+"""
+
+MERGE_POLICY_RELATIONSHIP_QUERY = """
+MATCH (source:PolicyEntity {id: $source_id})
+MATCH (target:PolicyEntity {id: $target_id})
+WHERE NOT EXISTS {
+    MATCH (source)-[existing:{rel_type}]->(target)
+    WHERE existing.operator = $operator
+      AND existing.min_version = $min_version
+}
+CREATE (source)-[r:{rel_type}]->(target)
+SET r.operator = $operator,
+    r.min_version = $min_version
+RETURN r
+"""
+
+GET_FULL_POLICY_GRAPH_QUERY = """
+MATCH (source:PolicyEntity)-[r]->(target:PolicyEntity)
+RETURN source.id AS source_id,
+       source.type AS source_type,
+       type(r) AS relationship_type,
+       r.operator AS operator,
+       r.min_version AS min_version,
+       target.id AS target_id,
+       target.type AS target_type
+"""
+
+GET_POLICY_ALL_NODES_QUERY = """
+MATCH (n:PolicyEntity)
+RETURN DISTINCT
+       n.id AS id,
+       n.type AS type
+ORDER BY type, id
+"""
+
+GET_POLICY_ALL_RELATIONSHIPS_QUERY = """
+MATCH (source:PolicyEntity)-[r]->(target:PolicyEntity)
+RETURN DISTINCT
+       source.id AS source_id,
+       source.type AS source_type,
+       type(r) AS relationship_type,
+       r.operator AS operator,
+       r.min_version AS min_version,
+       target.id AS target_id,
+       target.type AS target_type
+ORDER BY source_id, relationship_type, target_id
+"""
+
+CLEAR_POLICY_GRAPH_QUERY = """
+MATCH (n:PolicyEntity) DETACH DELETE n
+"""
+
+MERGE_POLICY_METADATA_QUERY = """
+MERGE (m:PolicyRulesetMetadata {id: "singleton"})
+SET m += $metadata
+RETURN m
+"""
+
+GET_POLICY_METADATA_QUERY = """
+MATCH (m:PolicyRulesetMetadata {id: "singleton"})
+RETURN m
+"""

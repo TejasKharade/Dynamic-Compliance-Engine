@@ -4,13 +4,7 @@ from neo4j import GraphDatabase
 from neo4j.exceptions import ServiceUnavailable, AuthError
 
 from src.schemas import ComplianceNode, ComplianceRelationship, ComplianceGraphDocument
-from src.database.cypher_queries import (
-    MERGE_NODE_QUERY,
-    MERGE_RELATIONSHIP_QUERY,
-    CLEAR_GRAPH_QUERY,
-    GET_FULL_GRAPH_QUERY,
-)
-
+from src.policy_schemas import PolicyNode, PolicyRelationship, PolicyGraphDocument
 from src.database.cypher_queries import (
     MERGE_NODE_QUERY,
     MERGE_RELATIONSHIP_QUERY,
@@ -23,7 +17,16 @@ from src.database.cypher_queries import (
     GET_RELEVANT_RELATIONSHIPS_QUERY,
     MERGE_METADATA_QUERY,
     GET_METADATA_QUERY,
-    GET_GLOBAL_VOCABULARY_QUERY
+    GET_GLOBAL_VOCABULARY_QUERY,
+    # Policy queries
+    MERGE_POLICY_NODE_QUERY,
+    MERGE_POLICY_RELATIONSHIP_QUERY,
+    GET_FULL_POLICY_GRAPH_QUERY,
+    GET_POLICY_ALL_NODES_QUERY,
+    GET_POLICY_ALL_RELATIONSHIPS_QUERY,
+    CLEAR_POLICY_GRAPH_QUERY,
+    MERGE_POLICY_METADATA_QUERY,
+    GET_POLICY_METADATA_QUERY,
 )
 
 load_dotenv()
@@ -291,3 +294,88 @@ class Neo4jClient:
         with self._driver.session() as session:
             result = session.run(GET_GLOBAL_VOCABULARY_QUERY)
             return {record["name"] for record in result}
+
+    # ------------------------------------------------------------------
+    # Product Policy Graph persistence & retrieval
+    # ------------------------------------------------------------------
+    def clear_policy_graph(self):
+        """Deletes all policy nodes and relationships from the database."""
+        with self._driver.session() as session:
+            session.run(CLEAR_POLICY_GRAPH_QUERY)
+        print("[Neo4j] Policy graph cleared — all policy nodes and relationships deleted.")
+
+    def save_policy_metadata(self, metadata: dict):
+        """Save policy ruleset metadata to a singleton node."""
+        with self._driver.session() as session:
+            session.run(MERGE_POLICY_METADATA_QUERY, metadata=metadata)
+            
+    def get_policy_metadata(self) -> dict:
+        """Retrieve policy ruleset metadata from the singleton node."""
+        with self._driver.session() as session:
+            result = session.run(GET_POLICY_METADATA_QUERY)
+            record = result.single()
+            if not record:
+                return {
+                    "graph_loaded": False,
+                    "active_ruleset": None,
+                    "nodes": 0,
+                    "relationships": 0
+                }
+            node = record["m"]
+            return {
+                "graph_loaded": True,
+                "active_ruleset": node.get("ruleset_name"),
+                "uploaded_at": node.get("uploaded_at"),
+                "nodes": node.get("node_count", 0),
+                "relationships": node.get("relationship_count", 0)
+            }
+
+    def upsert_policy_node(self, node: PolicyNode):
+        """MERGE a single PolicyNode into Neo4j."""
+        query = MERGE_POLICY_NODE_QUERY.format(type=node.type)
+        with self._driver.session() as session:
+            session.run(query, id=node.id, type=node.type)
+
+    def upsert_policy_relationship(self, rel: PolicyRelationship):
+        """MERGE a single PolicyRelationship into Neo4j."""
+        query = MERGE_POLICY_RELATIONSHIP_QUERY.format(rel_type=rel.type)
+        with self._driver.session() as session:
+            session.run(
+                query,
+                source_id=rel.source,
+                target_id=rel.target,
+                operator=rel.operator,
+                min_version=rel.min_version,
+            )
+
+    def push_policy_graph(self, graph_doc: PolicyGraphDocument):
+        """Persist an entire PolicyGraphDocument to Neo4j."""
+        print(f"\n[Neo4j] Pushing {len(graph_doc.nodes)} policy nodes...")
+        for node in graph_doc.nodes:
+            self.upsert_policy_node(node)
+            print(f"  [+] ({node.type}) {node.id}")
+
+        print(f"\n[Neo4j] Pushing {len(graph_doc.relationships)} policy relationships...")
+        for rel in graph_doc.relationships:
+            self.upsert_policy_relationship(rel)
+            ver_label = f" ({rel.operator}{rel.min_version})" if rel.min_version else ""
+            print(f"  [+] {rel.source} --[{rel.type}{ver_label}]--> {rel.target}")
+
+        print("\n[Neo4j] Policy graph successfully persisted!")
+
+    def get_full_policy_graph(self) -> list:
+        """Retrieve all policy relationships from Neo4j."""
+        with self._driver.session() as session:
+            result = session.run(GET_FULL_POLICY_GRAPH_QUERY)
+            return [dict(record) for record in result]
+
+    def get_policy_graph_network(self) -> dict:
+        """Return the policy graph in frontend-friendly format."""
+        with self._driver.session() as session:
+            nodes_result = session.run(GET_POLICY_ALL_NODES_QUERY)
+            edges_result = session.run(GET_POLICY_ALL_RELATIONSHIPS_QUERY)
+
+            nodes = [dict(record) for record in nodes_result]
+            edges = [dict(record) for record in edges_result]
+
+        return {"nodes": nodes, "edges": edges}

@@ -41,8 +41,12 @@ def extract_and_chunk_rules_file(filepath: str, max_chars: int = 8000) -> list[s
     
     text = ""
     if ext == "txt":
-        with open(filepath, 'r', encoding='utf-8') as f:
-            text = f.read()
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                text = f.read()
+        except UnicodeDecodeError:
+            with open(filepath, 'r', encoding='windows-1252', errors='replace') as f:
+                text = f.read()
             
     elif ext == "docx":
         doc = docx.Document(filepath)

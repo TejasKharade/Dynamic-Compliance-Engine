@@ -12,6 +12,7 @@ import DeviceDrilldown from "./pages/DeviceDrilldown";
 import RuleIngestion from "./pages/RuleIngestion";
 import Assistant from "./pages/Assistant";
 import SimulatePage from "./pages/SimulatePage";
+import PolicyPage from "./pages/PolicyPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -31,9 +32,10 @@ const App = () => (
             <Route path="/"              element={wrap(<FleetOverview />)} />
             <Route path="/devices/:deviceId" element={wrap(<DeviceDrilldown />)} />
             <Route path="/graph"         element={wrap(<GraphPage />)} />
-            <Route path="/rules"         element={wrap(<RuleIngestion />)} />
-            <Route path="/assistant"     element={wrap(<Assistant />)} />
             <Route path="/simulate"      element={wrap(<SimulatePage />)} />
+            <Route path="/rules"         element={wrap(<RuleIngestion />)} />
+            <Route path="/policy"        element={wrap(<PolicyPage />)} />
+            <Route path="/assistant"     element={wrap(<Assistant />)} />
             <Route path="*"             element={wrap(<NotFound />)} />
           </Routes>
         </AppLayout>
@@ -41,5 +43,6 @@ const App = () => (
     </TooltipProvider>
   </QueryClientProvider>
 );
+
 
 export default App;

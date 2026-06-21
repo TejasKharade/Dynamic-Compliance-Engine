@@ -1,0 +1,52 @@
+[
+  {
+    "device_id": "POLICY-DEV-001 (Fully Compliant)",
+    "components": [
+      { "name": "Docker Desktop", "version": "4.25.0" },
+      { "name": "WSL", "version": "2.2.4" },
+      { "name": "RAM", "version": "16 GB" },
+      { "name": "Virtualization", "version": "Enabled" },
+      { "name": "OperatingSystem", "version": "Windows 11 Enterprise 24H2" }
+    ]
+  },
+  {
+    "device_id": "POLICY-DEV-002 (WSL Outdated)",
+    "components": [
+      { "name": "Docker Desktop", "version": "4.25.0" },
+      { "name": "WSL", "version": "1.1.0" },
+      { "name": "RAM", "version": "16 GB" },
+      { "name": "Virtualization", "version": "Enabled" },
+      { "name": "OperatingSystem", "version": "Windows 11 Pro 23H2" }
+    ]
+  },
+  {
+    "device_id": "POLICY-DEV-003 (Low Memory)",
+    "components": [
+      { "name": "Docker Desktop", "version": "4.25.0" },
+      { "name": "WSL", "version": "2.2.4" },
+      { "name": "RAM", "version": "4 GB" },
+      { "name": "Virtualization", "version": "Enabled" },
+      { "name": "OperatingSystem", "version": "Windows 10 Enterprise 22H2" }
+    ]
+  },
+  {
+    "device_id": "POLICY-DEV-004 (Virtualization Disabled)",
+    "components": [
+      { "name": "Docker Desktop", "version": "4.25.0" },
+      { "name": "WSL", "version": "2.2.4" },
+      { "name": "RAM", "version": "8 GB" },
+      { "name": "Virtualization", "version": "Disabled" },
+      { "name": "OperatingSystem", "version": "Windows 11 Pro 24H2" }
+    ]
+  },
+  {
+    "device_id": "POLICY-DEV-005 (OS Conflict - Windows Server)",
+    "components": [
+      { "name": "Docker Desktop", "version": "4.25.0" },
+      { "name": "WSL", "version": "2.2.4" },
+      { "name": "RAM", "version": "32 GB" },
+      { "name": "Virtualization", "version": "Enabled" },
+      { "name": "OperatingSystem", "version": "Windows Server 2022 Standard" }
+    ]
+  }
+]

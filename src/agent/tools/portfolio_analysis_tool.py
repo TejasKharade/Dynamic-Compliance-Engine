@@ -31,6 +31,13 @@ def portfolio_risk_analysis() -> dict:
         if report:
             reports.append(report)
 
+    # Fallback/merge policy compliance reports
+    from src.agent.policy_report_store import list_policy_report_ids, find_policy_report
+    for device_id in list_policy_report_ids():
+        report = find_policy_report(device_id)
+        if report:
+            reports.append(report)
+
     if not reports:
         return {
             "found": False,

@@ -109,6 +109,7 @@ export interface EvaluationResponse {
     critical?: number;
     needs_attention?: number;
   };
+  policy_summary?: string;
 }
 
 export interface GraphNode {
@@ -319,4 +320,39 @@ export const api = {
     a.click();
     document.body.removeChild(a);
   },
+
+  /**
+   * POST /policy/evaluate (multipart)
+   */
+  evaluatePolicy: (files: { rules?: File[]; inventory?: File[] }) => {
+    const fd = new FormData();
+    if (files.rules?.[0]) fd.append("rules_file", files.rules[0]);
+    if (files.inventory?.[0]) fd.append("inventory_file", files.inventory[0]);
+    return request<EvaluationResponse>("/policy/evaluate", { method: "POST", body: fd });
+  },
+
+  /**
+   * POST /policy/ingest-rules (multipart)
+   */
+  ingestPolicyRules: (files: File[]) => {
+    const fd = new FormData();
+    if (files[0]) fd.append("rules_file", files[0]);
+    return request<IngestResponse>("/policy/ingest-rules", { method: "POST", body: fd });
+  },
+
+  /**
+   * GET /policy/graph/network
+   */
+  getPolicyGraphNetwork: () => request<GraphResponse>("/policy/graph/network"),
+
+  /**
+   * GET /policy/evaluate-inventory
+   */
+  getPolicyReports: () => request<EvaluationResponse>("/policy/evaluate-inventory"),
+
+  /**
+   * GET /policy/inventory/mock
+   */
+  getMockPolicyInventory: () => request<any[]>("/policy/inventory/mock"),
 };
+

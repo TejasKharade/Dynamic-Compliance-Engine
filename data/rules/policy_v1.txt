@@ -1,0 +1,13 @@
+DOCKER DESKTOP COMPLIANCE POLICY
+Test Policy Document
+
+Purpose: A set of corporate policy compliance requirements for deploying Docker Desktop on enterprise endpoints.
+
+================================================================
+1. CORE DOCKER DESKTOP SYSTEM REQUIREMENTS
+================================================================
+
+- Docker Desktop requires WSL 2.1.5 or newer on Windows endpoints to run the Linux container backend.
+- Docker Desktop requires at least 8 GB RAM of system memory to ensure container runtime stability.
+- Docker Desktop requires CPU Virtualization to be Enabled in system BIOS/UEFI.
+- Docker Desktop is not supported on Windows Server operating systems due to license and container runtime incompatibilities.

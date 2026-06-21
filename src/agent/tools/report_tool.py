@@ -30,6 +30,10 @@ def get_device_report(device_id: str) -> dict:
     report = find_report(device_id)
 
     if report is None:
+        from src.agent.policy_report_store import find_policy_report
+        report = find_policy_report(device_id)
+
+    if report is None:
         return {
             "found": False,
             "query": device_id,

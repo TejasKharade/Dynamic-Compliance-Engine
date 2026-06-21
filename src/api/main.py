@@ -16,6 +16,16 @@ from src.database.neo4j_client import Neo4jClient
 from src.ingestion.text_extractor import extract_rules_from_file
 from src.schemas import ComplianceGraphDocument, DeviceComplianceReport, ComplianceFinding
 from src.agent.compliance_react_agent import ask_agent
+
+# Product Policy Imports
+from src.policy_schemas import PolicyComplianceReport
+from src.core.policy_rag_evaluator import build_policy_vectorstore, evaluate_device_rag
+from src.agent.tools.policy_rag_tool import set_global_policy_rag_store
+from src.agent.policy_report_store import (
+    clear_policy_reports,
+    register_policy_report,
+    get_all_policy_reports_with_inventory,
+)
  
 from src.agent.report_store import (
     clear_reports,
@@ -126,6 +136,12 @@ class DeviceEvaluationOut(BaseModel):
 
 class EvaluationResponseOut(BaseModel):
     devices: list[DeviceEvaluationOut]
+
+
+class PolicyEvaluationResponseOut(BaseModel):
+    devices: list[DeviceEvaluationOut]
+    policy_summary: str | None = None
+
 
 
 class ExtractedRuleOut(BaseModel):
@@ -982,3 +998,229 @@ def simulate_change_endpoint(request: SimulateRequest):
 
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# =============================================================================
+# PRODUCT POLICY RELATIONSHIPS ENDPOINTS & HELPERS
+# =============================================================================
+
+class PolicyExtractedRuleOut(BaseModel):
+    component_a: str
+    component_b: str | None = None
+    relationship: str
+    version_constraint: str | None = None
+    severity: str | None = None
+
+
+class PolicyIngestResponse(BaseModel):
+    message: str
+    nodes: int
+    relationships: int
+    rules: list[PolicyExtractedRuleOut]
+
+
+def _policy_finding_to_violation(f) -> ViolationOut:
+    severity = f.severity if f.severity != "PASS" else "INFO"
+    components = [f.source, f.target]
+    explanation = f.remediation.reason if f.remediation else None
+    return ViolationOut(
+        rule_id=f.rule_type,
+        severity=severity,
+        message=f.message,
+        explanation=explanation,
+        components=components,
+    )
+
+
+def _policy_remediation_to_step(idx: int, f) -> RemediationStepOut:
+    rem = f.remediation
+    sub_steps = []
+    action_type = rem.action.lower()
+
+    if "enable" in action_type:
+        sub_steps = [
+            RemediationSubStep(order=1, description="Restart device and enter System BIOS settings (typically F2/F12)."),
+            RemediationSubStep(order=2, description="Navigate to CPU configuration / Security Options."),
+            RemediationSubStep(order=3, description="Enable Intel Virtualization Technology (VT-x) or AMD-V."),
+            RemediationSubStep(order=4, description="Save changes, exit BIOS, and boot back into the OS."),
+            RemediationSubStep(order=5, description="Open terminal and verify virtualization features are active.", command="systeminfo"),
+        ]
+    elif "install" in action_type:
+        sub_steps = [
+            RemediationSubStep(order=1, description=f"Download the latest installer package for {rem.component}."),
+            RemediationSubStep(order=2, description="Run installer package matching the system architecture."),
+            RemediationSubStep(order=3, description=f"Verify {rem.component} is active and properly added to user environment path."),
+        ]
+    elif "upgrade" in action_type:
+        sub_steps = [
+            RemediationSubStep(order=1, description=f"Check the current version of {rem.component}."),
+            RemediationSubStep(order=2, description=f"Download and run the upgrade package for {rem.component} to target version {rem.target_version or 'latest'}."),
+            RemediationSubStep(order=3, description="Restart dependent services to apply changes."),
+        ]
+    elif "remove" in action_type or "uninstall" in action_type:
+        sub_steps = [
+            RemediationSubStep(order=1, description=f"Open App Settings or configuration panel."),
+            RemediationSubStep(order=2, description=f"Select and uninstall {rem.component} to satisfy system policy restrictions."),
+        ]
+    else:
+        sub_steps = [
+            RemediationSubStep(order=1, description=f"Review the policy specification for {rem.component}."),
+            RemediationSubStep(order=2, description=f"Adjust system properties to align with requirements: {rem.reason}."),
+        ]
+
+    return RemediationStepOut(
+        order=idx,
+        action=f"{rem.action.capitalize()} {rem.component}" + (f" to {rem.target_version}" if rem.target_version else ""),
+        component=rem.component,
+        target_version=rem.target_version,
+        reason=rem.reason,
+        estimated_time="10–20 min",
+        risk=f.severity if f.severity in ("CRITICAL", "WARNING") else None,
+        sub_steps=sub_steps,
+    )
+
+
+def _policy_report_to_device_out(report: PolicyComplianceReport, inventory_item: dict[str, Any] | None = None) -> DeviceEvaluationOut:
+    violations = [_policy_finding_to_violation(f) for f in report.findings]
+
+    remediation = []
+    seen = set()
+    for idx, f in enumerate(report.findings, start=1):
+        if not f.remediation:
+            continue
+        key = f"{f.remediation.action}::{f.remediation.component}"
+        if key in seen:
+            continue
+        seen.add(key)
+        remediation.append(_policy_remediation_to_step(len(remediation) + 1, f))
+
+    specs = []
+    if inventory_item:
+        for comp in inventory_item.get("components", []):
+            name = comp.get("name")
+            version = comp.get("version")
+            if name and version:
+                specs.append(DeviceSpecOut(component=name, version=version, source="auto", confidence=1.0))
+
+    return DeviceEvaluationOut(
+        device_id=report.device_id,
+        name=None,
+        compliance_score=report.compliance_score,
+        is_compliant=report.is_compliant,
+        last_evaluated=None,
+        violations=violations,
+        remediation=remediation,
+        specs=specs,
+    )
+
+
+def _policy_reports_to_response(
+    pairs: list[tuple[PolicyComplianceReport, dict[str, Any] | None]],
+    summary: str | None = None,
+) -> PolicyEvaluationResponseOut:
+    return PolicyEvaluationResponseOut(
+        devices=[_policy_report_to_device_out(r, inv) for r, inv in pairs],
+        policy_summary=summary,
+    )
+
+
+@app.post("/policy/evaluate", response_model=PolicyEvaluationResponseOut)
+def evaluate_policy_from_files(
+    rules_file: UploadFile = File(...),
+    inventory_file: UploadFile = File(...),
+):
+    """
+    Unified product policy evaluation pipeline.
+    Uses RAG vector store to evaluate inventory against policy text.
+    """
+    rules_path = _save_upload_to_tempfile(rules_file)
+    try:
+        from src.ingestion.file_parsers import extract_and_chunk_rules_file
+        chunks = extract_and_chunk_rules_file(str(rules_path))
+        text = "\n\n".join(chunks)
+        vectorstore = build_policy_vectorstore(text)
+        set_global_policy_rag_store(vectorstore)
+    finally:
+        rules_path.unlink(missing_ok=True)
+
+    inventory_path = _save_upload_to_tempfile(inventory_file)
+    try:
+        try:
+            with open(inventory_path, "r", encoding="utf-8") as f:
+                inventory_text = f.read()
+        except UnicodeDecodeError:
+            with open(inventory_path, "r", encoding="windows-1252", errors="replace") as f:
+                inventory_text = f.read()
+    finally:
+        inventory_path.unlink(missing_ok=True)
+
+    clear_policy_reports()
+    
+    # Process the text input to evaluate all devices
+    fleet_report = evaluate_device_rag(inventory_text, vectorstore)
+
+    from src.agent.policy_report_store import set_latest_policy_summary
+    set_latest_policy_summary(fleet_report.summary)
+
+    for report in fleet_report.devices:
+        register_policy_report(report, inventory_item=None)
+
+    pairs = get_all_policy_reports_with_inventory()
+    return _policy_reports_to_response(pairs, fleet_report.summary)
+
+
+@app.post("/policy/ingest-rules", response_model=PolicyIngestResponse)
+def ingest_policy_rules_only(rules_file: UploadFile = File(...)):
+    """Extract policy rules into a Vector Store."""
+    rules_path = _save_upload_to_tempfile(rules_file)
+    try:
+        with open(rules_path, "r", encoding="utf-8") as f:
+            text = f.read()
+        vectorstore = build_policy_vectorstore(text)
+        set_global_policy_rag_store(vectorstore)
+    finally:
+        rules_path.unlink(missing_ok=True)
+
+    return PolicyIngestResponse(
+        message="Policy document ingested into Vector Store successfully.",
+        nodes=0,
+        relationships=0,
+        rules=[],
+    )
+
+
+@app.get("/policy/graph/network")
+def get_policy_graph_network_endpoint():
+    """Returns an empty graph since we now use vector RAG."""
+    return {"nodes": [], "edges": []}
+
+
+@app.get("/policy/evaluate-inventory", response_model=PolicyEvaluationResponseOut)
+def evaluate_policy_inventory_cached():
+    """Return the last-evaluated policy compliance reports from the in-memory cache."""
+    pairs = get_all_policy_reports_with_inventory()
+    from src.agent.policy_report_store import get_latest_policy_summary
+    return _policy_reports_to_response(pairs, get_latest_policy_summary())
+
+
+@app.post("/policy/evaluate-inventory", response_model=PolicyEvaluationResponseOut)
+def evaluate_policy_inventory_cached_post():
+    """Return the last-evaluated policy compliance reports (POST alias)."""
+    pairs = get_all_policy_reports_with_inventory()
+    from src.agent.policy_report_store import get_latest_policy_summary
+    return _policy_reports_to_response(pairs, get_latest_policy_summary())
+
+
+
+@app.get("/policy/inventory/mock")
+def get_mock_policy_inventory_endpoint():
+    """Load and return the mock policy inventory json directly."""
+    mock_path = Path(__file__).resolve().parent.parent.parent / "data" / "inventory" / "mock_policy_devices.json"
+    if not mock_path.exists():
+        raise HTTPException(status_code=404, detail="Mock policy inventory file not found.")
+    try:
+        with open(mock_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+

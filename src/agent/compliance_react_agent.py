@@ -15,6 +15,8 @@ from src.agent.tools.component_tool import query_component_context
 from src.agent.tools.device_analysis_tool import analyze_device
 from src.agent.tools.portfolio_analysis_tool import portfolio_risk_analysis
 from src.agent.tools.report_tool import get_device_report
+from src.agent.tools.policy_rag_tool import query_policy_rules
+from src.agent.tools.compliance_report_tool import query_compliance_report
 
 
 TOOLS = [
@@ -23,6 +25,8 @@ TOOLS = [
     query_component_context,
     simulate_change,
     portfolio_risk_analysis,
+    query_policy_rules,
+    query_compliance_report,
 ]
 
 SYSTEM_PROMPT = """
@@ -47,12 +51,15 @@ Important behavior:
 - Give concise, executive-friendly answers with the key conclusion first.
 
 Tool usage policy:
-- Use get_device_report for a single device's compliance status.
+- CRITICAL: For ANY question about a specific device's compliance status, failures, or remediation, ALWAYS use `analyze_device` or `get_device_report` FIRST. These tools automatically search both the Policy and Compatibility databases.
 - Use analyze_device for why a device failed and what to fix first.
+- Use get_device_report for a single device's raw compliance status.
 - Use query_component_context for general/knowledge questions about a component, BIOS, OS, driver, agent, or firmware.
 - CRITICAL: Use simulate_change for ALL deployment impact, upgrade planning, migration, and rollout questions. 
   Do not answer these from general knowledge. Always use simulate_change when the user asks "If I deploy X what else must change?" or similar.
 - Use portfolio_risk_analysis for fleet-wide priority and risk questions.
+- Use query_policy_rules to answer questions specifically about the rules from the uploaded corporate compliance policy document (e.g. "What are the rules for Docker Desktop?", "What are the memory requirements?").
+- WARNING: DO NOT use query_compliance_report unless the user explicitly asks for "policy summary" or "the latest compliance report". For everything else, use analyze_device, simulate_change, or query_policy_rules.
 
 Examples for simulate_change:
 - "If I deploy BIOS 2.0.0 what else must change?" -> simulate_change(component="BIOS", target_version="2.0.0")
@@ -68,7 +75,7 @@ class AgentState(TypedDict):
 
 
 _llm = ChatOpenAI(
-    model="gpt-4.1-mini",
+    model="gpt-4o-mini",
     temperature=0,
 )
 _tool_llm = _llm.bind_tools(TOOLS)
