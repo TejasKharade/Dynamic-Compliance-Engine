@@ -2,7 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
-from src.agent.report_store import store_reports
+from src.agent.report_store import register_report
 from src.core.compliance_evaluator import evaluate_inventory
 from src.schemas import ComplianceGraphDocument
 
@@ -79,7 +79,8 @@ def main() -> None:
     inventory = load_inventory(args.inventory)
     reports = evaluate_inventory(graph, inventory)
 
-    store_reports(reports)
+    for r in reports:
+        register_report(r)
     print_report_summary(reports)
 
     if args.output_json:
