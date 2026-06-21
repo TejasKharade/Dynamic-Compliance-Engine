@@ -568,3 +568,4 @@ def evaluate_inventory_from_db(
             reports.append(evaluate_device(local_relationships, device, global_component_vocabulary))
 
     return reports
+# hello
