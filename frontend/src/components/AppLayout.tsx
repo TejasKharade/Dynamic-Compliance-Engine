@@ -126,18 +126,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           >
             {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
           </button>
-          <div className="hidden md:flex items-center gap-2 flex-1 max-w-md h-9 rounded-md border border-border bg-card/50 px-3 text-muted-foreground">
-            <Search className="h-4 w-4" />
-            <input
-              type="text"
-              placeholder="Search devices, components, rules…"
-              className="flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
-            />
-            <kbd className="hidden lg:inline-flex font-mono text-[10px] text-muted-foreground border border-border rounded px-1.5 py-0.5">
-              ⌘K
-            </kbd>
-          </div>
-          <div className="flex-1 md:flex-none" />
+          <div className="flex-1" />
           <div className="flex items-center gap-2">
             <div className="hidden sm:flex items-center gap-2 px-2.5 h-9 rounded-md border border-border bg-card/50 text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
               <ServerCog className="h-3.5 w-3.5" />

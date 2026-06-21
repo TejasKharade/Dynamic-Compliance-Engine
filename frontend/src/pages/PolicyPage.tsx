@@ -160,14 +160,7 @@ export default function PolicyPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            onClick={loadSampleData}
-            disabled={busy}
-            className="inline-flex items-center gap-2 h-9 px-4 rounded-md border border-primary/30 bg-primary/5 text-primary text-[13px] font-medium hover:bg-primary/10 transition-colors"
-          >
-            <Settings className="h-3.5 w-3.5 animate-pulse" />
-            Load Sample Docker Policy
-          </button>
+          {/* Button removed */}
         </div>
       </div>
 
@@ -231,26 +224,39 @@ export default function PolicyPage() {
           )}
 
           {policySummary && (
-            <div className="glass-panel p-5 rounded-lg border border-border space-y-4 animate-in fade-in slide-in-from-top-4 duration-200">
-              <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-wider text-primary">
-                <FileText className="h-4 w-4" />
-                <span>LLM Policy Compliance Summary Report</span>
-              </div>
-              <div className={cn(
-                "prose prose-sm max-w-none border-t border-border/40 pt-4",
-                "dark:prose-invert",
-                "prose-p:my-2 prose-p:text-foreground",
-                "prose-headings:text-foreground prose-headings:font-semibold",
-                "prose-strong:text-foreground prose-strong:font-semibold",
-                "prose-em:text-foreground/80",
-                "prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:rounded prose-code:text-[12px] prose-code:before:content-none prose-code:after:content-none",
-                "prose-pre:bg-card prose-pre:border prose-pre:border-border prose-pre:text-[12px] prose-pre:text-foreground",
-                "prose-li:text-foreground prose-li:my-0.5",
-                "prose-ul:text-foreground prose-ol:text-foreground",
-                "prose-a:text-primary prose-a:no-underline hover:prose-a:underline",
-                "prose-blockquote:text-muted-foreground prose-blockquote:border-l-primary"
-              )}>
-                <ReactMarkdown>{policySummary}</ReactMarkdown>
+            <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-primary/10 via-background to-background p-8 shadow-[0_8px_30px_rgb(0,0,0,0.12)] backdrop-blur-xl transition-all duration-500 hover:shadow-[0_8px_40px_rgba(var(--primary),0.15)] group animate-in fade-in slide-in-from-bottom-4">
+              {/* Background decorative elements */}
+              <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/5 blur-3xl group-hover:bg-primary/10 transition-colors duration-500" />
+              <div className="absolute -left-20 -bottom-20 h-48 w-48 rounded-full bg-secondary/5 blur-3xl group-hover:bg-secondary/10 transition-colors duration-500" />
+              
+              <div className="relative z-10 space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-inner">
+                    <ShieldCheck className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                      LLM Policy Compliance Summary Report
+                    </h2>
+                    <div className="text-[11px] font-mono uppercase tracking-wider text-primary/80 mt-0.5">
+                      AI Generated Analysis
+                    </div>
+                  </div>
+                </div>
+
+                <div className={cn(
+                  "prose prose-sm max-w-none mt-6 pl-4 border-l-2 border-primary/20",
+                  "dark:prose-invert",
+                  "prose-p:leading-relaxed prose-p:text-foreground/90",
+                  "prose-headings:text-foreground prose-headings:font-bold prose-headings:tracking-tight",
+                  "prose-strong:text-primary prose-strong:font-semibold",
+                  "prose-ul:space-y-1.5 prose-li:text-foreground/90 prose-li:marker:text-primary",
+                  "prose-code:text-primary prose-code:bg-primary/5 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:text-[12px] prose-code:font-medium prose-code:before:content-none prose-code:after:content-none",
+                  "prose-pre:bg-black/40 prose-pre:border prose-pre:border-white/10 prose-pre:shadow-xl prose-pre:text-[12px]",
+                  "prose-blockquote:text-muted-foreground prose-blockquote:border-l-primary prose-blockquote:bg-primary/5 prose-blockquote:py-1 prose-blockquote:px-4 prose-blockquote:rounded-r-lg prose-blockquote:italic"
+                )}>
+                  <ReactMarkdown>{policySummary}</ReactMarkdown>
+                </div>
               </div>
             </div>
           )}

@@ -76,20 +76,23 @@ function RemediationChatbot({ device }: { device: DeviceEvaluation | null }) {
   return (
     <>
       {/* Floating trigger button */}
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className={cn(
-          "fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300",
-          "bg-gradient-to-br from-ai via-primary to-ai border border-ai/40",
-          "hover:scale-110 active:scale-95",
-          open && "rotate-180 scale-95",
-        )}
-        title="Remediation Assistant"
-      >
-        {open
-          ? <X className="h-6 w-6 text-white" />
-          : <MessageSquare className="h-6 w-6 text-white" />}
-      </button>
+      <div className="fixed bottom-6 right-6 z-50 relative group">
+        <div className={cn("absolute -inset-1 rounded-full bg-gradient-to-r from-ai via-primary to-ai opacity-50 blur group-hover:opacity-100 transition-opacity duration-300", open && "opacity-0")} />
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className={cn(
+            "relative h-14 w-14 rounded-full shadow-2xl flex items-center justify-center transition-all duration-300",
+            "bg-gradient-to-br from-ai to-ai/80 border border-ai/40",
+            "hover:scale-110 active:scale-95",
+            open && "rotate-180 scale-95 from-muted to-muted border-border",
+          )}
+          title="Remediation Assistant"
+        >
+          {open
+            ? <X className="h-6 w-6 text-foreground" />
+            : <MessageSquare className="h-6 w-6 text-white" />}
+        </button>
+      </div>
 
       {/* Chat panel */}
       {open && (
@@ -684,28 +687,40 @@ export default function DeviceDrilldown() {
   };
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto space-y-6">
-      <Link to="/" className="inline-flex items-center gap-1.5 text-[12px] font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-3 w-3" /> Fleet
+    <div className="relative min-h-[80vh] p-6 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-700">
+      
+      {/* Ambient background glows */}
+      <div className="pointer-events-none absolute top-0 left-[20%] h-[400px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-[120px]" />
+      <div className="pointer-events-none absolute top-[30%] right-[10%] h-[400px] w-[400px] translate-x-1/3 -translate-y-1/3 rounded-full bg-secondary/10 blur-[100px]" />
+
+      <Link to="/" className="relative z-10 inline-flex items-center gap-1.5 text-[12px] font-mono uppercase tracking-wider text-muted-foreground hover:text-primary transition-colors hover:-translate-x-1">
+        <ArrowLeft className="h-3 w-3" /> Fleet Overview
       </Link>
 
-      <div className="glass-panel rounded-xl p-6 flex items-start justify-between gap-6 flex-wrap">
-        <div className="space-y-1">
-          <div className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase">// Device</div>
-          <h1 className="text-2xl font-semibold">{device?.name ?? device?.device_id ?? deviceId}</h1>
-          <div className="font-mono text-[11px] text-muted-foreground">{device?.device_id}</div>
-          {device?.last_evaluated && <div className="font-mono text-[11px] text-muted-foreground mt-2">Last evaluated: {device.last_evaluated}</div>}
+      <div className="relative z-10 glass-panel rounded-2xl p-6 md:p-8 flex items-start justify-between gap-6 flex-wrap bg-card/40 backdrop-blur-xl border border-border/50 shadow-xl overflow-hidden">
+        <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+          <Server className="h-32 w-32" />
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="text-right">
-            <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Compliance Score</div>
-            <div className={cn("font-mono text-5xl font-semibold tabular-nums", scoreColor(device?.compliance_score))}>
+        <div className="space-y-2 relative z-10">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-mono tracking-[0.2em] text-primary uppercase mb-2 shadow-sm">
+             <Server className="h-3 w-3" /> // Device Drilldown
+          </div>
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-foreground/50 bg-clip-text text-transparent">
+            {device?.name ?? device?.device_id ?? deviceId}
+          </h1>
+          <div className="font-mono text-[12px] text-muted-foreground/80 font-medium bg-background/50 border border-border/50 px-2 py-0.5 rounded inline-block">ID: {device?.device_id}</div>
+          {device?.last_evaluated && <div className="font-mono text-[11px] text-muted-foreground mt-4 flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Last evaluated: {device.last_evaluated}</div>}
+        </div>
+        <div className="flex items-center gap-6 flex-wrap relative z-10">
+          <div className="text-right glass-panel px-6 py-4 rounded-xl bg-background/40 border border-border/50 shadow-inner">
+            <div className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">Health Score</div>
+            <div className={cn("font-mono text-6xl font-black tabular-nums tracking-tighter drop-shadow-sm", scoreColor(device?.compliance_score))}>
               {device?.compliance_score ?? "—"}
-              <span className="text-lg text-muted-foreground font-normal">/100</span>
+              <span className="text-2xl text-muted-foreground/50 font-bold tracking-normal ml-1">/100</span>
             </div>
           </div>
-          <button onClick={load} className="inline-flex items-center gap-2 h-9 px-3 rounded-md bg-primary text-primary-foreground text-[13px] font-medium hover:bg-primary/90">
-            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Re-evaluate
+          <button onClick={load} className="inline-flex items-center gap-2 h-12 px-6 rounded-xl bg-primary text-primary-foreground text-[14px] font-semibold hover:bg-primary/90 transition-all glow-primary shadow-lg hover:shadow-primary/25 hover:-translate-y-0.5">
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /> Re-evaluate Score
           </button>
         </div>
       </div>
@@ -736,29 +751,47 @@ export default function DeviceDrilldown() {
         <TabsContent value="violations" className="mt-4 space-y-2">
           {loading ? <Skeleton className="h-32 w-full" />
             : (device?.violations ?? []).length === 0 ? (
-              <div className="glass-panel rounded-xl p-8 text-center text-success">✓ No violations on this device.</div>
+              <div className="glass-panel rounded-2xl p-10 text-center text-success border border-success/20 bg-success/5 shadow-inner">
+                <div className="h-16 w-16 mx-auto bg-success/10 rounded-full flex items-center justify-center mb-4">
+                  <Sparkles className="h-8 w-8 text-success" />
+                </div>
+                <div className="text-xl font-bold">✓ Zero Violations Detected</div>
+                <div className="text-muted-foreground mt-2">This device is fully compliant with all ingested policies.</div>
+              </div>
             ) : (
-              (device?.violations ?? []).map((v, i) => (
-                <div key={i} className="glass-panel rounded-xl p-4 space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <SeverityBadge severity={String(v.severity)} />
-                    {v.rule_id && <span className="font-mono text-[11px] text-muted-foreground">{v.rule_id}</span>}
-                    {v.components && v.components.map((c) => (
-                      <span key={c} className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-primary/20 text-primary/80">{c}</span>
-                    ))}
-                  </div>
-                  <div className="text-sm font-medium">{v.message}</div>
-                  {v.explanation && (
-                    <div className="flex gap-2 p-3 rounded-lg border border-ai/30 bg-ai/5">
-                      <Sparkles className="h-4 w-4 text-ai shrink-0 mt-0.5" />
-                      <div>
-                        <div className="font-mono text-[9px] uppercase tracking-wider text-ai mb-1">Remediation Hint</div>
-                        <div className="text-[13px] text-foreground/90">{v.explanation}</div>
+              <div className="grid gap-4">
+                {(device?.violations ?? []).map((v, i) => (
+                  <div key={i} className="relative overflow-hidden glass-panel rounded-2xl p-6 border border-border/60 shadow-md hover:shadow-lg transition-shadow">
+                    <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", 
+                      v.severity === "CRITICAL" ? "bg-destructive" : 
+                      v.severity === "WARNING" ? "bg-warning" : "bg-primary"
+                    )} />
+                    <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <SeverityBadge severity={String(v.severity)} />
+                        {v.rule_id && <span className="font-mono text-[12px] font-bold text-foreground/80 bg-background/50 px-2 py-0.5 rounded border border-border/50">{v.rule_id}</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {v.components && v.components.map((c) => (
+                          <span key={c} className="font-mono text-[10px] uppercase font-bold px-2 py-1 rounded bg-card/60 border border-border text-foreground/70 flex items-center gap-1"><Cpu className="h-3 w-3" /> {c}</span>
+                        ))}
                       </div>
                     </div>
-                  )}
-                </div>
-              ))
+                    <div className="text-base font-medium text-foreground mb-4 leading-snug">{v.message}</div>
+                    {v.explanation && (
+                      <div className="flex gap-3 p-4 rounded-xl border border-ai/20 bg-gradient-to-r from-ai/10 to-transparent">
+                        <div className="h-8 w-8 shrink-0 rounded-full bg-ai/20 grid place-items-center">
+                          <Sparkles className="h-4 w-4 text-ai" />
+                        </div>
+                        <div>
+                          <div className="font-mono text-[10px] uppercase font-bold tracking-widest text-ai mb-1">AI Remediation Hint</div>
+                          <div className="text-[13px] text-foreground/90 leading-relaxed">{v.explanation}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
         </TabsContent>
 

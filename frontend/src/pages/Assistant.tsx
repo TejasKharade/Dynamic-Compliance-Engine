@@ -58,46 +58,52 @@ export default function Assistant() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-background text-foreground">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] bg-background text-foreground relative overflow-hidden animate-in fade-in duration-700">
+      
+      {/* Ambient background glow for AI */}
+      <div className="pointer-events-none absolute top-[20%] left-1/2 -translate-x-1/2 h-[600px] w-[800px] rounded-full bg-ai/5 blur-[120px]" />
 
       {/* ── Header ── */}
-      <div className="px-6 py-4 border-b border-border flex items-center gap-3">
-        <div className="h-9 w-9 rounded-md grid place-items-center bg-ai/10 border border-ai/30">
-          <Sparkles className="h-4 w-4 text-ai" />
+      <div className="relative z-10 px-6 py-4 border-b border-border/50 bg-card/30 backdrop-blur-md flex items-center gap-4 shadow-sm">
+        <div className="h-10 w-10 rounded-xl grid place-items-center bg-gradient-to-br from-ai/20 to-ai/5 border border-ai/30 shadow-inner">
+          <Sparkles className="h-5 w-5 text-ai" />
         </div>
         <div className="flex-1">
-          <div className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase">AI-powered guidance</div>
-          <h1 className="text-lg font-semibold flex items-center gap-2 text-foreground">
+          <div className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase font-semibold">AI-powered guidance</div>
+          <h1 className="text-xl font-bold flex items-center gap-2 text-foreground tracking-tight">
             Compliance Assistant
-            <span className="font-mono text-[9px] tracking-wider text-ai border border-ai/40 px-1.5 rounded-sm bg-ai/5">AI</span>
+            <span className="font-mono text-[10px] tracking-widest text-ai border border-ai/40 px-2 py-0.5 rounded bg-ai/10 font-bold shadow-[0_0_10px_rgba(var(--ai),0.2)]">AI</span>
           </h1>
         </div>
         {messages.length > 0 && (
           <button
             onClick={clearHistory}
             title="Clear history"
-            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border text-[11px] font-mono text-muted-foreground hover:text-destructive hover:border-destructive/40 transition-colors"
+            className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-border/50 bg-background/50 text-[12px] font-mono font-medium text-muted-foreground hover:text-destructive hover:border-destructive/40 hover:bg-destructive/10 transition-all shadow-sm"
           >
-            <Trash2 className="h-3.5 w-3.5" /> Clear
+            <Trash2 className="h-4 w-4" /> Clear
           </button>
         )}
       </div>
 
       {/* ── Messages ── */}
-      <div className="flex-1 overflow-auto scrollbar-thin">
-        <div className="max-w-3xl mx-auto px-6 py-6 space-y-5">
+      <div className="flex-1 overflow-auto scrollbar-thin relative z-10">
+        <div className="max-w-4xl mx-auto px-6 py-8 space-y-6">
 
           {/* Empty state */}
           {messages.length === 0 && (
-            <div className="text-center py-12 space-y-4">
-              <div className="h-16 w-16 rounded-2xl mx-auto grid place-items-center bg-ai/10 border border-ai/30">
-                <Sparkles className="h-8 w-8 text-ai opacity-80" />
+            <div className="text-center py-16 space-y-6 max-w-2xl mx-auto glass-panel rounded-3xl border border-border/50 bg-card/20 backdrop-blur-md shadow-2xl mt-10 relative overflow-hidden">
+              <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-ai/50 to-transparent" />
+              <div className="h-20 w-20 rounded-full mx-auto grid place-items-center bg-gradient-to-b from-ai/20 to-transparent border border-ai/30 shadow-[0_0_30px_rgba(var(--ai),0.15)]">
+                <Sparkles className="h-10 w-10 text-ai opacity-90" />
               </div>
-              <div className="text-foreground font-semibold text-lg">Ask the compliance engine anything.</div>
-              <div className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
-                Examples: "Which devices have BIOS conflicts?", "Why is server R750-04 non-compliant?", "What is the remediation for the latest blocker?"
+              <div className="space-y-2">
+                <div className="text-foreground font-extrabold text-2xl tracking-tight">Ask the Engine Anything</div>
+                <div className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
+                  Examples: "Which devices have BIOS conflicts?", "Why is server R750-04 non-compliant?", "What is the remediation for the latest blocker?"
+                </div>
               </div>
-              <div className="flex flex-wrap justify-center gap-2 pt-2">
+              <div className="flex flex-wrap justify-center gap-3 pt-4 px-6">
                 {[
                   "Show me all critical violations",
                   "Which devices need BIOS upgrade?",
@@ -107,7 +113,7 @@ export default function Assistant() {
                   <button
                     key={q}
                     onClick={() => { setInput(q); inputRef.current?.focus(); }}
-                    className="text-[12px] px-3 py-1.5 rounded-full border border-border text-muted-foreground hover:border-ai/50 hover:text-ai transition-colors bg-card/50"
+                    className="text-[13px] font-medium px-4 py-2 rounded-xl border border-border/50 text-muted-foreground hover:border-ai/50 hover:bg-ai/5 hover:text-ai transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 bg-background/50 backdrop-blur-sm"
                   >
                     {q}
                   </button>
@@ -118,24 +124,26 @@ export default function Assistant() {
 
           {/* Message bubbles */}
           {messages.map((m, i) => (
-            <div key={i} className={cn("flex gap-3", m.role === "user" ? "justify-end" : "justify-start")}>
+            <div key={i} className={cn("flex gap-4 group", m.role === "user" ? "justify-end" : "justify-start")}>
 
               {/* AI avatar */}
               {m.role === "assistant" && (
-                <div className="h-7 w-7 rounded-md grid place-items-center bg-ai/10 border border-ai/30 shrink-0 mt-0.5">
-                  <Sparkles className="h-3.5 w-3.5 text-ai" />
+                <div className="h-8 w-8 rounded-full grid place-items-center bg-gradient-to-br from-ai/20 to-ai/5 border border-ai/30 shrink-0 mt-1 shadow-[0_0_15px_rgba(var(--ai),0.1)]">
+                  <Sparkles className="h-4 w-4 text-ai" />
                 </div>
               )}
 
               {/* Bubble */}
               <div className={cn(
-                "max-w-[80%] px-4 py-3 rounded-xl text-[13.5px] leading-relaxed",
+                "max-w-[85%] px-5 py-4 text-[14px] leading-relaxed shadow-md transition-all",
                 m.role === "user"
-                  ? "bg-primary text-primary-foreground rounded-br-sm"
-                  : "bg-card border border-border border-l-2 border-l-ai text-foreground rounded-bl-sm shadow-sm",
+                  ? "bg-gradient-to-tr from-primary to-primary/80 text-primary-foreground rounded-2xl rounded-tr-sm"
+                  : "bg-card/80 backdrop-blur-md border border-border/60 border-l-2 border-l-ai text-foreground rounded-2xl rounded-tl-sm hover:shadow-lg",
               )}>
                 {m.role === "assistant" && (
-                  <div className="font-mono text-[9px] tracking-wider text-ai mb-2 uppercase">AI Response</div>
+                  <div className="font-mono text-[10px] font-bold tracking-widest text-ai mb-3 uppercase flex items-center gap-2">
+                    <Sparkles className="h-3 w-3" /> AI Engine
+                  </div>
                 )}
 
                 {/*
@@ -187,8 +195,8 @@ export default function Assistant() {
 
               {/* User avatar */}
               {m.role === "user" && (
-                <div className="h-7 w-7 rounded-md grid place-items-center bg-primary/10 border border-primary/30 shrink-0 mt-0.5">
-                  <User className="h-3.5 w-3.5 text-primary" />
+                <div className="h-8 w-8 rounded-full grid place-items-center bg-primary/10 border border-primary/30 shrink-0 mt-1">
+                  <User className="h-4 w-4 text-primary" />
                 </div>
               )}
             </div>
@@ -196,52 +204,57 @@ export default function Assistant() {
 
           {/* Thinking indicator */}
           {busy && (
-            <div className="flex gap-3">
-              <div className="h-7 w-7 rounded-md grid place-items-center bg-ai/10 border border-ai/30 shrink-0">
-                <Sparkles className="h-3.5 w-3.5 text-ai animate-pulse" />
+            <div className="flex gap-4 animate-in fade-in slide-in-from-bottom-2">
+              <div className="h-8 w-8 rounded-full grid place-items-center bg-gradient-to-br from-ai/20 to-ai/5 border border-ai/30 shrink-0 shadow-[0_0_15px_rgba(var(--ai),0.1)]">
+                <Sparkles className="h-4 w-4 text-ai animate-pulse" />
               </div>
-              <div className="px-4 py-2.5 rounded-xl bg-card border border-border border-l-2 border-l-ai shadow-sm">
-                <div className="flex items-center gap-1.5">
+              <div className="px-5 py-4 rounded-2xl rounded-tl-sm bg-card/80 backdrop-blur-md border border-border/60 border-l-2 border-l-ai shadow-md">
+                <div className="flex items-center gap-2">
                   {[0, 1, 2].map((d) => (
-                    <span key={d} className="h-1.5 w-1.5 rounded-full bg-ai animate-bounce" style={{ animationDelay: `${d * 0.15}s` }} />
+                    <span key={d} className="h-2 w-2 rounded-full bg-ai animate-bounce" style={{ animationDelay: `${d * 0.15}s` }} />
                   ))}
-                  <span className="font-mono text-[11px] text-ai ml-1 uppercase tracking-wider">Thinking…</span>
+                  <span className="font-mono text-[11px] font-bold text-ai ml-2 uppercase tracking-wider">Analyzing Context…</span>
                 </div>
               </div>
             </div>
           )}
 
           {error && (
-            <div className="text-sm text-destructive font-mono px-1">{error}</div>
+            <div className="text-sm text-destructive font-mono px-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg">{error}</div>
           )}
-          <div ref={endRef} />
+          <div ref={endRef} className="h-4" />
         </div>
       </div>
 
       {/* ── Input area ── */}
-      <div className="border-t border-border bg-background/80 backdrop-blur-md">
-        <div className="max-w-3xl mx-auto p-4">
-          <div className="flex items-end gap-2 rounded-xl border border-border bg-card/70 px-3 py-2 focus-within:border-ai/50 transition-colors">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder="Ask about compliance, devices, rules, remediation…"
-              rows={1}
-              className="flex-1 bg-transparent outline-none text-[13.5px] resize-none max-h-40 py-1.5 text-foreground placeholder:text-muted-foreground"
-            />
-            <button
-              onClick={send}
-              disabled={busy || !input.trim()}
-              className="h-9 w-9 grid place-items-center rounded-lg bg-ai text-ai-foreground disabled:opacity-40 hover:opacity-90 transition-opacity glow-ai"
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </button>
+      <div className="relative z-20 border-t border-border/40 bg-background/60 backdrop-blur-xl p-4 md:p-6 pb-6 md:pb-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="relative group">
+            {/* Glowing border effect */}
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-ai/40 to-primary/40 rounded-2xl blur opacity-30 group-focus-within:opacity-70 transition duration-500" />
+            
+            <div className="relative flex items-end gap-3 rounded-2xl border border-border/60 bg-card/90 px-4 py-3 shadow-xl focus-within:border-ai/50 transition-colors">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                placeholder="Ask about compliance, devices, rules, remediation…"
+                rows={1}
+                className="flex-1 bg-transparent outline-none text-[14px] font-medium resize-none max-h-40 py-2 text-foreground placeholder:text-muted-foreground/60"
+              />
+              <button
+                onClick={send}
+                disabled={busy || !input.trim()}
+                className="h-10 w-10 shrink-0 grid place-items-center rounded-xl bg-gradient-to-br from-ai to-ai/80 text-white disabled:opacity-40 hover:opacity-100 transition-all shadow-md hover:shadow-ai/30 hover:-translate-y-0.5"
+              >
+                {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5 ml-0.5" />}
+              </button>
+            </div>
           </div>
-          <div className="font-mono text-[10px] text-muted-foreground mt-1.5 px-1">
-            Press <kbd className="px-1 py-0.5 rounded border border-border bg-muted text-foreground text-[9px]">Enter</kbd> to send ·{" "}
-            <kbd className="px-1 py-0.5 rounded border border-border bg-muted text-foreground text-[9px]">Shift+Enter</kbd> for newline · history persisted for this session
+          <div className="font-mono text-[11px] font-medium text-muted-foreground/60 mt-3 text-center">
+            Press <kbd className="px-1.5 py-0.5 rounded border border-border/50 bg-muted/50 text-foreground text-[10px]">Enter</kbd> to send ·{" "}
+            <kbd className="px-1.5 py-0.5 rounded border border-border/50 bg-muted/50 text-foreground text-[10px]">Shift+Enter</kbd> for newline · History is saved locally
           </div>
         </div>
       </div>

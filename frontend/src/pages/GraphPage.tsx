@@ -201,20 +201,26 @@ export default function GraphPage() {
   }, [selected, isDark]);
 
   return (
-    <div className="p-6 space-y-4 max-w-[1600px] mx-auto">
+    <div className="relative min-h-[80vh] p-6 space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-700">
+      {/* Ambient background glows */}
+      <div className="pointer-events-none absolute left-[5%] top-[10%] h-[500px] w-[500px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-[120px]" />
+      <div className="pointer-events-none absolute right-[5%] bottom-[10%] h-[400px] w-[400px] translate-x-1/3 translate-y-1/3 rounded-full bg-secondary/10 blur-[120px]" />
+
       {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="relative z-10 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <div className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-1">// Compliance Knowledge Graph</div>
-          <h1 className="text-2xl font-semibold">Knowledge Graph Visualizer</h1>
-          <p className="text-sm text-muted-foreground mt-1">Interactive component dependency network · Drag, zoom, click nodes to inspect</p>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-mono tracking-[0.2em] text-primary uppercase mb-4 shadow-sm">
+             <Network className="h-3 w-3" /> // Knowledge Graph
+          </div>
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-foreground via-foreground/90 to-foreground/50 bg-clip-text text-transparent">Knowledge Graph Visualizer</h1>
+          <p className="text-base text-muted-foreground mt-2 max-w-2xl leading-relaxed">Interactive component dependency network · Drag, zoom, click nodes to inspect</p>
         </div>
         <button
           onClick={fetchGraph}
           disabled={loading}
-          className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-border text-[12px] font-mono text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-2 h-10 px-5 rounded-lg border border-border/50 bg-card/40 backdrop-blur-sm text-[13px] font-medium text-muted-foreground hover:text-foreground hover:border-primary/40 hover:bg-primary/5 transition-all shadow-sm hover:shadow-md disabled:opacity-50"
         >
-          <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh Graph
+          <RefreshCw className={cn("h-4 w-4 text-primary", loading && "animate-spin")} /> Refresh Graph
         </button>
       </div>
 
@@ -234,9 +240,9 @@ export default function GraphPage() {
       )}
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-card/50 flex-1 max-w-sm">
-          <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-wrap bg-card/30 backdrop-blur-md p-3 rounded-2xl border border-border/50 shadow-lg">
+        <div className="flex items-center gap-2 h-10 px-4 rounded-xl border border-border/50 bg-background/50 flex-1 max-w-sm focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/50 transition-all shadow-inner">
+          <Search className="h-4 w-4 text-primary shrink-0" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -249,9 +255,9 @@ export default function GraphPage() {
               }
             }}
             placeholder="Jump to component (Enter to search)…"
-            className="flex-1 bg-transparent text-[13px] outline-none"
+            className="flex-1 bg-transparent text-[13px] font-medium outline-none placeholder:font-normal"
           />
-          {query && <button onClick={() => setQuery("")}><X className="h-3 w-3 text-muted-foreground" /></button>}
+          {query && <button onClick={() => setQuery("")} className="hover:bg-muted p-1 rounded-full transition-colors"><X className="h-3 w-3 text-muted-foreground" /></button>}
         </div>
 
         {/* Relationship filter chips */}
@@ -279,33 +285,34 @@ export default function GraphPage() {
       </div>
 
       {/* Main layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
         {/* Graph canvas */}
-        <div ref={containerRef} className="glass-panel rounded-xl overflow-hidden relative" style={{ height: "min(72vh, 740px)" }}>
+        <div ref={containerRef} className="glass-panel rounded-2xl overflow-hidden relative shadow-2xl border border-border/50 bg-card/20 backdrop-blur-xl" style={{ height: "min(72vh, 760px)" }}>
           {loading && (
-            <div className="absolute inset-0 grid place-items-center">
-              <div className="text-center space-y-2">
-                <RefreshCw className="h-6 w-6 text-muted-foreground animate-spin mx-auto" />
-                <div className="text-sm text-muted-foreground font-mono">Loading graph from Neo4j…</div>
+            <div className="absolute inset-0 grid place-items-center bg-background/50 backdrop-blur-sm z-20">
+              <div className="text-center space-y-4">
+                <RefreshCw className="h-8 w-8 text-primary animate-spin mx-auto" />
+                <div className="text-sm text-foreground font-semibold tracking-tight">Initializing Graph Engine...</div>
+                <div className="text-[11px] text-muted-foreground font-mono">Fetching nodes from Neo4j</div>
               </div>
             </div>
           )}
           {error && (
-            <div className="absolute inset-0 grid place-items-center text-center px-6">
-              <div className="space-y-2">
-                <AlertTriangle className="h-8 w-8 text-destructive mx-auto" />
-                <div className="text-sm text-destructive">{error}</div>
-                <button onClick={fetchGraph} className="text-[12px] font-mono text-muted-foreground hover:text-foreground underline">Retry</button>
+            <div className="absolute inset-0 grid place-items-center text-center px-6 bg-background/50 backdrop-blur-sm z-20">
+              <div className="space-y-4 max-w-md p-8 glass-panel rounded-2xl border-destructive/30">
+                <AlertTriangle className="h-10 w-10 text-destructive mx-auto" />
+                <div className="text-sm font-semibold text-destructive">{error}</div>
+                <button onClick={fetchGraph} className="px-4 py-2 bg-destructive/10 text-destructive rounded hover:bg-destructive/20 font-mono text-xs transition-colors">Retry Connection</button>
               </div>
             </div>
           )}
           {!loading && !error && graph.nodes.length === 0 && (
-            <div className="absolute inset-0 grid place-items-center text-center px-6">
-              <div className="space-y-3">
-                <Network className="h-10 w-10 text-muted-foreground mx-auto" />
-                <div className="text-sm font-medium text-muted-foreground">No graph data yet</div>
-                <div className="text-[12px] text-muted-foreground/60">
-                  Ingest a rules file from the <strong>Rule Ingestion</strong> page to populate the compliance knowledge graph.
+            <div className="absolute inset-0 grid place-items-center text-center px-6 z-20">
+              <div className="space-y-4 max-w-sm glass-panel p-8 rounded-2xl">
+                <Network className="h-12 w-12 text-muted-foreground/50 mx-auto" />
+                <div className="text-lg font-semibold text-foreground tracking-tight">Graph is Empty</div>
+                <div className="text-[13px] text-muted-foreground leading-relaxed">
+                  Ingest rule documents in the <strong>Rule Management</strong> page to populate the knowledge graph.
                 </div>
               </div>
             </div>
@@ -354,21 +361,23 @@ export default function GraphPage() {
         </div>
 
         {/* Inspector sidebar */}
-        <aside className="glass-panel rounded-xl p-5 h-fit lg:sticky lg:top-20 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Node Inspector</div>
+        <aside className="glass-panel rounded-2xl p-6 h-fit lg:sticky lg:top-20 space-y-6 shadow-xl border-border/50 bg-gradient-to-b from-card/60 to-background backdrop-blur-xl">
+          <div className="flex items-center justify-between pb-4 border-b border-border/40">
+            <div className="flex items-center gap-2">
+              <Info className="h-4 w-4 text-primary" />
+              <div className="font-semibold text-sm tracking-tight">Inspector panel</div>
+            </div>
             {selected && (
-              <button onClick={() => setSelected(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+              <button onClick={() => setSelected(null)} className="h-6 w-6 flex items-center justify-center rounded-full bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground transition-all">
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
 
           {!selected ? (
-            <div className="space-y-4">
-              <div className="flex items-start gap-2 text-[12px] text-muted-foreground">
-                <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                <span>Click any node in the graph to inspect its details and connections.</span>
+            <div className="space-y-6">
+              <div className="text-[13px] text-muted-foreground leading-relaxed">
+                Click any node in the canvas to inspect its exact attributes, version constraints, and relationships.
               </div>
               <div>
                 <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Edge Types</div>

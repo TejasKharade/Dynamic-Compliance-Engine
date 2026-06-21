@@ -405,10 +405,13 @@ export default function SimulatePage() {
       </div>
 
       {/* ── Input form ── */}
-      <div className="glass-panel rounded-xl p-5 space-y-4">
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="space-y-1.5">
-            <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+      <div className="relative z-10 glass-panel rounded-2xl p-6 md:p-8 space-y-6 bg-card/40 backdrop-blur-xl border border-border/50 shadow-xl overflow-hidden">
+        <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
+          <Zap className="h-32 w-32" />
+        </div>
+        <div className="grid sm:grid-cols-2 gap-6 relative z-10">
+          <div className="space-y-2">
+            <label className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground ml-1">
               Component name
             </label>
             <input
@@ -416,34 +419,34 @@ export default function SimulatePage() {
               value={component}
               onChange={(e) => setComponent(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && run()}
-              placeholder="e.g.  BIOS 1.6.2  ·  Windows 11  ·  Intel Chipset Driver"
-              className="w-full h-10 bg-card/50 border border-border rounded-lg px-3 text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 transition-colors"
+              placeholder="e.g. BIOS 1.6.2 · Windows 11"
+              className="w-full h-12 bg-background/50 backdrop-blur-sm border border-border/60 rounded-xl px-4 text-[14px] text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
             />
           </div>
-          <div className="space-y-1.5">
-            <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              Target version <span className="normal-case text-muted-foreground/60">(optional)</span>
+          <div className="space-y-2">
+            <label className="font-mono text-[11px] font-semibold uppercase tracking-wider text-muted-foreground ml-1">
+              Target version <span className="normal-case text-muted-foreground/50">(optional)</span>
             </label>
             <input
               type="text"
               value={version}
               onChange={(e) => setVersion(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && run()}
-              placeholder="e.g.  2.0.0  ·  24H2  ·  6.10.30"
-              className="w-full h-10 bg-card/50 border border-border rounded-lg px-3 text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 transition-colors"
+              placeholder="e.g. 2.0.0 · 24H2"
+              className="w-full h-12 bg-background/50 backdrop-blur-sm border border-border/60 rounded-xl px-4 text-[14px] text-foreground placeholder:text-muted-foreground/60 outline-none focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
             />
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <span className="font-mono text-[10px] text-muted-foreground self-center">Try:</span>
+        <div className="flex flex-wrap items-center gap-3 relative z-10">
+          <span className="font-mono text-[11px] text-muted-foreground/80 font-medium">Try:</span>
           {EXAMPLES.map((ex) => (
             <button
               key={ex.component + ex.version}
               onClick={() => { setComponent(ex.component); setVersion(ex.version); run(ex.component, ex.version); }}
-              className="text-[11px] px-2.5 py-1 rounded-full border border-border text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors bg-card/40"
+              className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-border/50 text-muted-foreground hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-all bg-card/40 shadow-sm"
             >
-              {ex.component}{ex.version ? ` → ${ex.version}` : ""}
+              {ex.component}{ex.version ? <span className="opacity-60 ml-1">→ {ex.version}</span> : ""}
             </button>
           ))}
         </div>
@@ -451,18 +454,51 @@ export default function SimulatePage() {
         <button
           onClick={() => run()}
           disabled={busy || !component.trim()}
-          className="inline-flex items-center gap-2 h-10 px-5 rounded-lg bg-primary text-primary-foreground text-[13px] font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors glow-primary"
+          className="relative z-10 inline-flex items-center gap-2 h-12 px-8 rounded-xl bg-primary text-primary-foreground text-[14px] font-semibold hover:bg-primary/90 disabled:opacity-50 transition-all glow-primary shadow-lg hover:shadow-primary/25 hover:-translate-y-0.5"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-          {busy ? "Simulating…" : "Run Simulation"}
+          {busy ? "Running Simulation Engine…" : "Run Simulation Analysis"}
         </button>
       </div>
 
+      {/* ── Empty State / Feature Showcase ── */}
+      {!result && !busy && !error && (
+        <div className="relative z-10 grid md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 mt-8">
+          <div className="glass-panel rounded-2xl p-6 border border-border/50 bg-card/20 backdrop-blur-sm hover:bg-card/40 transition-colors group">
+            <div className="h-12 w-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <ShieldAlert className="h-6 w-6 text-primary" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground mb-2">Proactive Risk Detection</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Discover conflicts and blockers before they reach production. The engine cross-references the entire knowledge graph instantly.
+            </p>
+          </div>
+          <div className="glass-panel rounded-2xl p-6 border border-border/50 bg-card/20 backdrop-blur-sm hover:bg-card/40 transition-colors group">
+            <div className="h-12 w-12 rounded-xl bg-warning/10 border border-warning/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <GitBranch className="h-6 w-6 text-warning" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground mb-2">Blast Radius Analysis</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              See exactly which devices will be affected by a component upgrade across your entire fleet in real-time.
+            </p>
+          </div>
+          <div className="glass-panel rounded-2xl p-6 border border-border/50 bg-card/20 backdrop-blur-sm hover:bg-card/40 transition-colors group">
+            <div className="h-12 w-12 rounded-xl bg-ai/10 border border-ai/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <Zap className="h-6 w-6 text-ai" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground mb-2">Actionable Intelligence</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Get immediate, context-aware remediation steps to safely execute the change without breaking dependencies.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── Error ── */}
       {error && (
-        <div className="glass-panel rounded-xl p-4 border-l-2 border-destructive flex items-start gap-3">
+        <div className="relative z-10 glass-panel rounded-xl p-4 border-l-2 border-destructive flex items-start gap-3 bg-destructive/5">
           <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-          <span className="text-sm text-destructive">{error}</span>
+          <span className="text-sm text-destructive font-medium">{error}</span>
         </div>
       )}
 
@@ -477,29 +513,32 @@ export default function SimulatePage() {
 
       {/* ── Results ── */}
       {result?.found && (
-        <div ref={resultRef} className="space-y-5">
+        <div ref={resultRef} className="space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
 
           {/* Change summary + Risk badge */}
-          <div className="flex flex-wrap gap-4 items-start">
-            <div className="flex-1 glass-panel rounded-xl p-4 space-y-1 min-w-[260px]">
-              <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Simulating change</div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-sm font-semibold text-foreground">
+          <div className="flex flex-wrap gap-4 items-stretch">
+            <div className="flex-1 relative overflow-hidden glass-panel rounded-2xl p-6 space-y-2 min-w-[260px] bg-card/40 backdrop-blur-xl border border-border/50 shadow-lg">
+              <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                <GitBranch className="h-24 w-24" />
+              </div>
+              <div className="relative z-10 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/80 font-semibold">Simulating change</div>
+              <div className="relative z-10 flex items-center gap-3 flex-wrap">
+                <span className="font-mono text-lg font-bold text-foreground">
                   {result.change_request?.component}
                 </span>
                 {result.change_request?.target_version && (
                   <>
-                    <ArrowRight className="h-4 w-4 text-primary shrink-0" />
-                    <span className="font-mono text-sm font-bold text-primary">
+                    <ArrowRight className="h-5 w-5 text-primary shrink-0 opacity-80" />
+                    <span className="font-mono text-lg font-extrabold text-primary bg-primary/10 px-3 py-0.5 rounded-lg border border-primary/20 shadow-sm">
                       {result.change_request.target_version}
                     </span>
                   </>
                 )}
               </div>
-              <div className="font-mono text-[10px] text-muted-foreground">
-                Graph node: <span className="text-foreground">{result.change_request?.graph_node_used}</span>
+              <div className="relative z-10 font-mono text-[11px] text-muted-foreground mt-2">
+                Graph node matched: <span className="text-foreground font-medium bg-card px-1.5 py-0.5 rounded border border-border/50">{result.change_request?.graph_node_used}</span>
                 {result.graph_context?.component_type && (
-                  <> · type: <span className="text-foreground">{result.graph_context.component_type}</span></>
+                  <> · type: <span className="text-foreground font-medium uppercase">{result.graph_context.component_type}</span></>
                 )}
               </div>
             </div>
@@ -508,13 +547,14 @@ export default function SimulatePage() {
               const Icon = riskStyle.icon;
               return (
                 <div className={cn(
-                  "glass-panel rounded-xl p-4 flex items-center gap-3 border-2 min-w-[180px]",
+                  "relative overflow-hidden glass-panel rounded-2xl p-6 flex items-center gap-4 border-2 min-w-[220px] shadow-lg",
                   riskStyle.bg, riskStyle.border
                 )}>
-                  <Icon className={cn("h-8 w-8", riskStyle.text)} />
-                  <div>
-                    <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">Deployment Risk</div>
-                    <div className={cn("text-xl font-black font-mono tracking-wider", riskStyle.text)}>
+                  <div className={cn("absolute -right-6 -bottom-6 h-32 w-32 rounded-full blur-3xl opacity-20", `bg-${riskStyle.text.split("-")[1]}`)} />
+                  <Icon className={cn("h-10 w-10 relative z-10", riskStyle.text)} />
+                  <div className="relative z-10">
+                    <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Deployment Risk</div>
+                    <div className={cn("text-2xl font-black font-mono tracking-tighter", riskStyle.text)}>
                       {riskStyle.label}
                     </div>
                   </div>
@@ -523,15 +563,15 @@ export default function SimulatePage() {
             })()}
 
             {result.impact_summary && (
-              <div className="flex gap-3 flex-wrap">
+              <div className="flex gap-4 flex-wrap">
                 {[
-                  { label: "Affected Devices", val: result.impact_summary.devices_with_related_findings, color: "text-foreground" },
-                  { label: "Critical",         val: result.impact_summary.critical_devices,              color: "text-destructive" },
-                  { label: "Warnings",         val: result.impact_summary.warning_devices,               color: "text-warning" },
+                  { label: "Affected Devices", val: result.impact_summary.devices_with_related_findings, color: "text-foreground", bg: "bg-card/40" },
+                  { label: "Critical Risk",    val: result.impact_summary.critical_devices,              color: "text-destructive", bg: "bg-destructive/5" },
+                  { label: "Warnings",         val: result.impact_summary.warning_devices,               color: "text-warning", bg: "bg-warning/5" },
                 ].map((s) => (
-                  <div key={s.label} className="glass-panel rounded-xl p-4 text-center min-w-[100px]">
-                    <div className={cn("text-3xl font-black font-mono", s.color)}>{s.val}</div>
-                    <div className="font-mono text-[9px] uppercase tracking-wider text-muted-foreground mt-1">{s.label}</div>
+                  <div key={s.label} className={cn("relative overflow-hidden glass-panel rounded-2xl p-5 text-center min-w-[120px] shadow-lg border border-border/50 backdrop-blur-md flex flex-col justify-center", s.bg)}>
+                    <div className={cn("text-4xl font-extrabold font-mono tracking-tighter relative z-10", s.color)}>{s.val}</div>
+                    <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mt-2 font-semibold relative z-10">{s.label}</div>
                   </div>
                 ))}
               </div>
