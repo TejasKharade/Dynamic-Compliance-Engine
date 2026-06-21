@@ -117,7 +117,7 @@ def _evaluate_relationship(
     installed_entity_ids: set[str],
     installed_versions_by_name: dict[str, str],
     valid_component_names: set[str],
-) -> ComplianceFinding | None:
+) -> tuple[bool, ComplianceFinding | None]:
     rel_type = str(rel["relationship_type"]).strip()
     source_id = str(rel["source_id"]).strip()
     target_id = str(rel["target_id"]).strip()
@@ -129,14 +129,14 @@ def _evaluate_relationship(
     target_generic = _get_generic_name(target_id, target_type, valid_component_names)
 
     if source_generic not in installed_versions_by_name:
-        return None
+        return False, None
 
     if source_id != source_generic and source_id not in installed_entity_ids:
-        return None
+        return False, None
 
     if target_id != target_generic and target_id not in installed_entity_ids:
         if rel_type != "REQUIRES" or target_generic in installed_versions_by_name:
-            return None
+            return False, None
 
     target_for_version_check = target_generic
     is_inverted_constraint = False
@@ -164,7 +164,7 @@ def _evaluate_relationship(
 
     if component_missing:
         if rel_type == "REQUIRES":
-            return ComplianceFinding(
+            return True, ComplianceFinding(
                 rule_type=rel_type,
                 severity="CRITICAL",
                 source=source_id,
@@ -172,7 +172,7 @@ def _evaluate_relationship(
                 message=f"{rule_subject} requires {rule_object}, but it is not installed.",
                 remediation=_build_reremediation(rel_type, rule_object, False, str(min_version) if min_version else None)
             )
-        return None
+        return True, None
 
     clean_operator = re.sub(r"[A-Za-z]+", "", operator).strip()
     if not clean_operator and ("ANY" in operator or operator == ""):
@@ -207,7 +207,7 @@ def _evaluate_relationship(
             severity = "WARNING"
 
     if not is_violation:
-        return None
+        return True, None
 
     if rel_type == "REQUIRES":
         msg = f"{rule_subject} requires {rule_object} {operator} {min_version}, but the installed value is {installed_value}." if min_version else f"{rule_subject} requires {rule_object}."
@@ -222,7 +222,7 @@ def _evaluate_relationship(
 
     target_present = remediation_component in installed_versions_by_name
 
-    return ComplianceFinding(
+    return True, ComplianceFinding(
         rule_type=rel_type,
         severity=severity,
         source=source_id,
@@ -254,12 +254,53 @@ def evaluate_device(
     installed_entity_ids, installed_versions_by_name, inventory_names = _build_inventory_indexes(device_inventory)
     valid_component_names = global_component_vocabulary.union(inventory_names)
 
+    # Group relationships by (source_id, target_id, rel_type) for OR logic on COMPATIBLE_WITH, REQUIRES, RECOMMENDS
+    or_groups: dict[Any, list[dict[str, Any]]] = {}
+    other_rels: list[dict[str, Any]] = []
+
+    for rel in relevant_relationships:
+        rel_type = str(rel["relationship_type"]).strip()
+        if rel_type in ("COMPATIBLE_WITH", "REQUIRES", "RECOMMENDS"):
+            source_id = str(rel["source_id"]).strip()
+            target_id = str(rel["target_id"]).strip()
+            if rel_type == "COMPATIBLE_WITH":
+                key = (frozenset({source_id, target_id}), rel_type)
+            else:
+                key = (source_id, target_id, rel_type)
+            if key not in or_groups:
+                or_groups[key] = []
+            or_groups[key].append(rel)
+        else:
+            other_rels.append(rel)
+
     findings: list[ComplianceFinding] = []
     seen_finding_keys: set[tuple[str, str, str]] = set()
 
-    for rel in relevant_relationships:
-        finding = _evaluate_relationship(rel, installed_entity_ids, installed_versions_by_name, valid_component_names)
-        if finding is not None:
+    # 1. Process OR groups
+    for key, rels in or_groups.items():
+        results = [
+            (rel, _evaluate_relationship(rel, installed_entity_ids, installed_versions_by_name, valid_component_names))
+            for rel in rels
+        ]
+        is_any_satisfied = any(
+            is_applicable and finding is None
+            for rel, (is_applicable, finding) in results
+        )
+        if is_any_satisfied:
+            continue
+        
+        for rel, (is_applicable, finding) in results:
+            if is_applicable and finding is not None:
+                finding_key = tuple(sorted([finding.source, finding.target]) + [finding.rule_type])
+                if finding_key in seen_finding_keys:
+                    continue
+                seen_finding_keys.add(finding_key)
+                findings.append(finding)
+
+    # 2. Process other relationships (e.g. CONFLICTS_WITH, WARNS_AGAINST)
+    for rel in other_rels:
+        is_applicable, finding = _evaluate_relationship(rel, installed_entity_ids, installed_versions_by_name, valid_component_names)
+        if is_applicable and finding is not None:
             finding_key = tuple(sorted([finding.source, finding.target]) + [finding.rule_type])
             if finding_key in seen_finding_keys:
                 continue

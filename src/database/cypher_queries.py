@@ -22,15 +22,22 @@ RETURN n
 """
 
 # -----------------------------------------------------------------------------
-# MERGE a relationship between two existing nodes.
+# CREATE a relationship between two existing nodes, avoiding exact duplicates.
 # - Looks up source and target nodes by their `id` property.
-# - MERGE on the relationship means duplicate rules are never written.
-# - Sets operator and min_version as edge properties.
+# - Uses a conditional CREATE so that each unique combination of
+#   (source, target, rel_type, operator, min_version) produces its own edge.
+#   This prevents multi-version rules (e.g. "compatible with 4.11 and 4.12")
+#   from being collapsed into a single relationship.
 # -----------------------------------------------------------------------------
 MERGE_RELATIONSHIP_QUERY = """
 MATCH (source:ComplianceEntity {{id: $source_id}})
 MATCH (target:ComplianceEntity {{id: $target_id}})
-MERGE (source)-[r:{rel_type}]->(target)
+WHERE NOT EXISTS {{
+    MATCH (source)-[existing:{rel_type}]->(target)
+    WHERE existing.operator = $operator
+      AND existing.min_version = $min_version
+}}
+CREATE (source)-[r:{rel_type}]->(target)
 SET r.operator = $operator,
     r.min_version = $min_version
 RETURN r

@@ -1,10 +1,11 @@
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from src.schemas import ComplianceGraphDocument
+from src.schemas import ComplianceGraphDocument, ComplianceRelationship
 from src.ingestion.file_parsers import extract_and_chunk_rules_file
 
 # 1. Initialize the LLM Model
@@ -245,6 +246,23 @@ operator = "ANY"
 min_version = null
 
 ============================================================
+MULTI-VERSION EXTRACTION RULES
+==============================
+
+If a sentence states that a component is compatible with multiple versions, such as "4.11 and 4.12" or "4.11, 4.12, or 4.13", create separate relationship entries for each version.
+
+Example:
+"BIOS 2.0.0 is compatible with Dell Command Update 4.11 and 4.12"
+must produce:
+1. source="BIOS 2.0.0", target="Dell Command Update", type="COMPATIBLE_WITH", operator="==", min_version="4.11"
+2. source="BIOS 2.0.0", target="Dell Command Update", type="COMPATIBLE_WITH", operator="==", min_version="4.12"
+
+Do not keep only one version.
+Do not ignore earlier versions in a list.
+Do not merge multiple versions into a single extracted relationship.
+If a sentence says "compatible with X and Y", treat X and Y as separate allowed versions and preserve every version mentioned.
+
+============================================================
 DEDUPLICATION RULES
 ===================
 
@@ -292,9 +310,39 @@ structured_llm = llm.with_structured_output(ComplianceGraphDocument)
 extraction_chain = prompt_template | structured_llm
 
 
+# ---------------------------------------------------------------------------
+# Post-processing: split compound min_version values into separate
+# relationships.  The LLM sometimes returns "4.11 and 4.12" or
+# "4.11, 4.12, or 4.13" as a single min_version string instead of
+# producing one relationship per version.  This deterministic step
+# guarantees every version gets its own relationship.
+# ---------------------------------------------------------------------------
+_VERSION_SPLIT_RE = re.compile(r'\s*(?:,\s*(?:and|or)?\s*|\s+and\s+|\s+or\s+)\s*', re.IGNORECASE)
+
+def _split_compound_versions(graph: ComplianceGraphDocument) -> ComplianceGraphDocument:
+    """Split relationships whose min_version contains multiple versions."""
+    expanded: list[ComplianceRelationship] = []
+    for rel in graph.relationships:
+        mv = rel.min_version
+        if mv and _VERSION_SPLIT_RE.search(mv):
+            parts = [v.strip() for v in _VERSION_SPLIT_RE.split(mv) if v.strip()]
+            for part in parts:
+                expanded.append(ComplianceRelationship(
+                    source=rel.source,
+                    target=rel.target,
+                    type=rel.type,
+                    operator=rel.operator,
+                    min_version=part,
+                ))
+        else:
+            expanded.append(rel)
+    return ComplianceGraphDocument(nodes=graph.nodes, relationships=expanded)
+
+
 def extract_rules_from_text(text: str) -> ComplianceGraphDocument:
     """Synchronously extract a compliance graph from a raw text string."""
-    return extraction_chain.invoke({"input": text})
+    graph = extraction_chain.invoke({"input": text})
+    return _split_compound_versions(graph)
 
 
 def merge_graphs(graphs: list[ComplianceGraphDocument]) -> ComplianceGraphDocument:
@@ -332,4 +380,5 @@ def extract_rules_from_file(filepath: str) -> ComplianceGraphDocument:
 
 async def extract_rules_from_text_async(text: str) -> ComplianceGraphDocument:
     """Asynchronously extract a compliance graph from a raw text string."""
-    return await extraction_chain.ainvoke({"input": text})
+    graph = await extraction_chain.ainvoke({"input": text})
+    return _split_compound_versions(graph)
