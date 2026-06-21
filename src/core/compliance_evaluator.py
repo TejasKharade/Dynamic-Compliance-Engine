@@ -538,7 +538,7 @@ def evaluate_inventory(
             rel for rel in master_relationship_pool
             if str(rel["source_id"]).strip() in entity_ids or str(rel["target_id"]).strip() in entity_ids
         ]
-            reports.append(evaluate_device(local_relationships, device, global_component_vocabulary))
+        reports.append(evaluate_device(local_relationships, device, global_component_vocabulary))
 
     return reports
 
