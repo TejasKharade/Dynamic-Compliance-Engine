@@ -17,6 +17,7 @@ import {
   ChevronUp,
   Settings,
   HelpCircle,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -42,6 +43,41 @@ Purpose: A set of corporate policy compliance requirements for deploying Docker 
 - Docker Desktop requires CPU Virtualization to be Enabled in system BIOS/UEFI.
 - Docker Desktop is not supported on Windows Server operating systems due to license and container runtime incompatibilities.
 `;
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatInlineMarkdown(value: string) {
+  return escapeHtml(value).replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+}
+
+function policySummaryToHtml(summary: string) {
+  const lines = summary.split(/\r?\n/);
+  return lines.map((line) => {
+    const trimmed = line.trim();
+
+    if (!trimmed) return "<br />";
+
+    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      const level = Math.min(heading[1].length + 1, 4);
+      return `<h${level}>${formatInlineMarkdown(heading[2])}</h${level}>`;
+    }
+
+    const bullet = trimmed.match(/^[-*]\s+(.+)$/);
+    if (bullet) {
+      return `<div class="bullet"><span class="bullet-dot">•</span><span>${formatInlineMarkdown(bullet[1])}</span></div>`;
+    }
+
+    return `<p>${formatInlineMarkdown(trimmed)}</p>`;
+  }).join("");
+}
 
 export default function PolicyPage() {
   const [ruleFiles, setRuleFiles] = useState<File[]>([]);
@@ -147,6 +183,310 @@ export default function PolicyPage() {
     return reports.find((d) => d.device_id === selectedDevice) || null;
   }, [reports, selectedDevice]);
 
+  const exportPolicySummaryPDF = () => {
+    if (!policySummary) return;
+
+    const compliant = reports.filter((d) => d.is_compliant).length;
+    const nonCompliant = Math.max(0, reports.length - compliant);
+    const generatedAt = new Date().toLocaleString();
+    const reportRows = reports.map((device) => {
+      const score = device.compliance_score ?? 0;
+      const critical = device.violations.filter((v) => String(v.severity).toUpperCase() === "CRITICAL").length;
+      const warning = device.violations.filter((v) => String(v.severity).toUpperCase() === "WARNING").length;
+      const statusClass = device.is_compliant ? "pass" : "fail";
+      const statusText = device.is_compliant ? "Compatible" : "Needs Action";
+
+      return `<tr>
+        <td>${escapeHtml(device.device_id)}</td>
+        <td><span class="score ${score >= 90 ? "good" : score >= 70 ? "warn" : "bad"}">${score}</span></td>
+        <td><span class="status ${statusClass}">${statusText}</span></td>
+        <td>${critical}</td>
+        <td>${warning}</td>
+      </tr>`;
+    }).join("");
+
+    const html = `<!DOCTYPE html><html><head>
+      <meta charset="utf-8" />
+      <title>Policy Compliance Summary Report</title>
+      <style>
+        @page { margin: 18mm 14mm; size: A4 portrait; }
+        * { box-sizing: border-box; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          color: #0f172a;
+          background: #f8fafc;
+          font-size: 10.5pt;
+          line-height: 1.55;
+          margin: 0;
+        }
+        .header {
+          position: relative;
+          overflow: hidden;
+          color: #ffffff;
+          background: linear-gradient(135deg, #312e81 0%, #2563eb 52%, #0891b2 100%);
+          border-radius: 14pt;
+          padding: 18pt 20pt;
+          margin-bottom: 16pt;
+          box-shadow: 0 14pt 28pt rgba(37, 99, 235, .18);
+        }
+        .header:before, .header:after {
+          content: "";
+          position: absolute;
+          border-radius: 999px;
+          background: rgba(255,255,255,.13);
+        }
+        .header:before {
+          width: 130pt;
+          height: 130pt;
+          right: -38pt;
+          top: -58pt;
+        }
+        .header:after {
+          width: 78pt;
+          height: 78pt;
+          left: 56%;
+          bottom: -42pt;
+        }
+        .brand {
+          position: relative;
+          z-index: 1;
+          display: flex;
+          align-items: center;
+          gap: 10pt;
+          margin-bottom: 10pt;
+        }
+        .brand-mark {
+          width: 34pt;
+          height: 34pt;
+          border-radius: 10pt;
+          display: grid;
+          place-items: center;
+          background: rgba(255,255,255,.18);
+          border: 1px solid rgba(255,255,255,.3);
+          font-size: 17pt;
+          font-weight: 800;
+        }
+        h1 {
+          margin: 0 0 4pt;
+          color: #ffffff;
+          font-size: 19pt;
+          line-height: 1.2;
+        }
+        .meta {
+          color: rgba(255,255,255,.78);
+          font-family: "Courier New", monospace;
+          font-size: 8pt;
+          text-transform: uppercase;
+          letter-spacing: .08em;
+        }
+        .kpis {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 8pt;
+          margin: 0 0 14pt;
+        }
+        .kpi {
+          border: 1px solid #dbeafe;
+          border-radius: 10pt;
+          padding: 10pt;
+          background: #ffffff;
+          box-shadow: 0 6pt 18pt rgba(15,23,42,.06);
+        }
+        .kpi .label {
+          color: #64748b;
+          font-family: "Courier New", monospace;
+          font-size: 7pt;
+          text-transform: uppercase;
+          letter-spacing: .09em;
+          margin-bottom: 4pt;
+        }
+        .kpi .value {
+          font-size: 20pt;
+          font-weight: 800;
+          color: #1e1b4b;
+          line-height: 1;
+        }
+        .kpi.primary { border-top: 4pt solid #2563eb; }
+        .kpi.success { border-top: 4pt solid #16a34a; }
+        .kpi.warn { border-top: 4pt solid #ca8a04; }
+        .kpi.critical { border-top: 4pt solid #dc2626; }
+        .progress-wrap {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 10pt;
+          padding: 10pt 12pt;
+          margin-bottom: 16pt;
+        }
+        .progress-head {
+          display: flex;
+          justify-content: space-between;
+          color: #334155;
+          font-size: 9pt;
+          font-weight: 700;
+          margin-bottom: 6pt;
+        }
+        .progress-track {
+          height: 9pt;
+          border-radius: 999px;
+          background: #fee2e2;
+          overflow: hidden;
+        }
+        .progress-bar {
+          height: 100%;
+          width: ${stats.compliantPercent}%;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #16a34a, #22c55e);
+        }
+        .section-card {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12pt;
+          padding: 14pt;
+          margin-bottom: 14pt;
+          box-shadow: 0 8pt 22pt rgba(15,23,42,.05);
+        }
+        h2, h3, h4 {
+          color: #312e81;
+          margin: 14pt 0 6pt;
+          page-break-after: avoid;
+          border-bottom: 1px solid #e0e7ff;
+          padding-bottom: 3pt;
+        }
+        h2 { font-size: 14pt; }
+        h3 { font-size: 12pt; }
+        h4 { font-size: 11pt; }
+        p {
+          margin: 0 0 7pt;
+        }
+        strong { color: #1d4ed8; }
+        .bullet {
+          display: flex;
+          gap: 6pt;
+          margin: 3pt 0;
+          padding: 4pt 6pt;
+          border-radius: 6pt;
+          background: #f8fafc;
+          border-left: 3pt solid #93c5fd;
+        }
+        .bullet-dot {
+          color: #2563eb;
+          font-weight: 800;
+        }
+        .content {
+          white-space: normal;
+        }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          background: #ffffff;
+          border-radius: 10pt;
+          overflow: hidden;
+          border: 1px solid #e2e8f0;
+        }
+        th {
+          text-align: left;
+          color: #475569;
+          background: #eef2ff;
+          font-size: 7.5pt;
+          font-family: "Courier New", monospace;
+          text-transform: uppercase;
+          letter-spacing: .08em;
+          padding: 6pt;
+        }
+        td {
+          padding: 7pt 6pt;
+          border-top: 1px solid #e2e8f0;
+          font-size: 9pt;
+        }
+        .score {
+          font-family: "Courier New", monospace;
+          font-weight: 800;
+        }
+        .score.good { color: #16a34a; }
+        .score.warn { color: #ca8a04; }
+        .score.bad { color: #dc2626; }
+        .status {
+          display: inline-block;
+          border-radius: 999px;
+          padding: 2pt 7pt;
+          font-size: 7.5pt;
+          font-weight: 800;
+          font-family: "Courier New", monospace;
+          text-transform: uppercase;
+        }
+        .status.pass {
+          color: #166534;
+          background: #dcfce7;
+        }
+        .status.fail {
+          color: #991b1b;
+          background: #fee2e2;
+        }
+        .footer {
+          margin-top: 20pt;
+          padding-top: 8pt;
+          border-top: 1px solid #e2e8f0;
+          color: #94a3b8;
+          font-family: "Courier New", monospace;
+          font-size: 7.5pt;
+        }
+      </style>
+    </head><body>
+      <div class="header">
+        <div class="brand">
+          <div class="brand-mark">CIQ</div>
+          <div>
+            <h1>LLM Policy Compliance Summary Report</h1>
+            <div class="meta">AI Generated Analysis | Generated ${escapeHtml(generatedAt)}</div>
+          </div>
+        </div>
+      </div>
+      <section class="kpis">
+        <div class="kpi primary"><div class="label">Devices</div><div class="value">${stats.total}</div></div>
+        <div class="kpi success"><div class="label">Compatible</div><div class="value">${compliant}</div></div>
+        <div class="kpi critical"><div class="label">Needs Action</div><div class="value">${nonCompliant}</div></div>
+        <div class="kpi warn"><div class="label">Critical Checks</div><div class="value">${stats.criticalCount}</div></div>
+      </section>
+      <section class="progress-wrap">
+        <div class="progress-head">
+          <span>Fleet policy compliance</span>
+          <span>${stats.compliantPercent}% compatible</span>
+        </div>
+        <div class="progress-track"><div class="progress-bar"></div></div>
+      </section>
+      <main class="section-card content">${policySummaryToHtml(policySummary)}</main>
+      ${reports.length ? `<section class="section-card">
+        <h2>Device Compliance Snapshot</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Device</th>
+              <th>Score</th>
+              <th>Status</th>
+              <th>Critical</th>
+              <th>Warnings</th>
+            </tr>
+          </thead>
+          <tbody>${reportRows}</tbody>
+        </table>
+      </section>` : ""}
+      <div class="footer">ComplianceIQ - Policy compliance summary export</div>
+    </body></html>`;
+
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) {
+      toast.error("Pop-up blocked. Allow pop-ups and try again.");
+      return;
+    }
+
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => {
+      win.focus();
+      win.print();
+    }, 400);
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -230,7 +570,8 @@ export default function PolicyPage() {
               <div className="absolute -left-20 -bottom-20 h-48 w-48 rounded-full bg-secondary/5 blur-3xl group-hover:bg-secondary/10 transition-colors duration-500" />
               
               <div className="relative z-10 space-y-6">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary shadow-inner">
                     <ShieldCheck className="h-5 w-5" />
                   </div>
@@ -242,6 +583,15 @@ export default function PolicyPage() {
                       AI Generated Analysis
                     </div>
                   </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={exportPolicySummaryPDF}
+                    className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-primary/30 bg-primary/10 text-primary text-[12px] font-medium hover:bg-primary/15 hover:border-primary/50 transition-colors"
+                  >
+                    <Download className="h-4 w-4" />
+                    Download PDF
+                  </button>
                 </div>
 
                 <div className={cn(
