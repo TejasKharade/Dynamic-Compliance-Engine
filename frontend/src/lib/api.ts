@@ -30,7 +30,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch (err) {
     throw new ApiError(
-      `Could not reach compliance engine at ${API_BASE_URL}. Is the backend running?`,
+      "Could not reach the compliance engine. Please verify that the service is running.",
       0,
       err,
     );

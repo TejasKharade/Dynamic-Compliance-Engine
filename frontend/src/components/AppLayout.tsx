@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
-import { api, API_BASE_URL } from "@/lib/api";
+import { api } from "@/lib/api";
 import { ThemeToggle } from "./ThemeToggle";
 
 const navItems = [
@@ -88,7 +88,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="p-3 border-t border-sidebar-border space-y-1.5">
           <div className="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-            <span>Backend</span>
+            <span>Service</span>
             <span className="flex items-center gap-1.5">
               <span
                 className={cn(
@@ -102,9 +102,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               />
               {health === true ? "ONLINE" : health === false ? "OFFLINE" : "PING…"}
             </span>
-          </div>
-          <div className="font-mono text-[10px] text-muted-foreground/70 truncate" title={API_BASE_URL}>
-            {API_BASE_URL}
           </div>
         </div>
       </aside>

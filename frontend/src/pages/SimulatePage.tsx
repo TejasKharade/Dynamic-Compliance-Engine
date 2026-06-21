@@ -393,7 +393,7 @@ export default function SimulatePage() {
       {/* ── Header ── */}
       <div>
         <div className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-1">
-          // What-If · POST /simulate
+          What-If Analysis
         </div>
         <h1 className="text-2xl font-semibold flex items-center gap-2 text-foreground">
           <Zap className="h-6 w-6 text-primary" />

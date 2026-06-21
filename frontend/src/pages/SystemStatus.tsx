@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, ApiError, API_BASE_URL, SystemStatus as Status } from "@/lib/api";
+import { api, ApiError, SystemStatus as Status } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { Server, Database, RefreshCw, ChevronDown } from "lucide-react";
 
@@ -50,7 +50,7 @@ export default function SystemStatusPage() {
         <div>
           <div className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase mb-1">// Admin · Diagnostics</div>
           <h1 className="text-2xl font-semibold">System Status</h1>
-          <p className="text-sm text-muted-foreground mt-1 font-mono">{API_BASE_URL}</p>
+          <p className="text-sm text-muted-foreground mt-1">Live service and data connection health.</p>
         </div>
         <button onClick={refresh} disabled={loading} className="inline-flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-card/50 hover:border-primary/40 text-[12px] font-mono uppercase tracking-wider">
           <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
@@ -59,21 +59,21 @@ export default function SystemStatusPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <StatusCard label="API /health" ok={healthOk} icon={Server} detail="basic liveness probe" />
-        <StatusCard label="System /system/status" ok={sysErr ? false : sys ? true : null} icon={Server} detail={sysErr ?? (sys?.status as string | undefined) ?? "—"} />
+        <StatusCard label="Core Service" ok={healthOk} icon={Server} detail="Application availability" />
+        <StatusCard label="System Services" ok={sysErr ? false : sys ? true : null} icon={Server} detail={sysErr ?? (sys?.status as string | undefined) ?? "—"} />
         <StatusCard label="Neo4j Connection" ok={neo4jOk} icon={Database} detail={sys?.last_ingestion ? `Last ingestion: ${sys.last_ingestion}` : "—"} />
       </div>
 
       {sys && (
         <div className="glass-panel rounded-lg p-4">
-          <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-2">Raw /system/status response</div>
+          <div className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground mb-2">System details</div>
           <pre className="font-mono text-[11px] overflow-auto max-h-[320px] text-foreground/80 bg-surface-2/40 rounded p-3">{JSON.stringify(sys, null, 2)}</pre>
         </div>
       )}
 
       <div className="border border-dashed border-border rounded-lg overflow-hidden">
         <button onClick={() => setShowCache((s) => !s)} className="w-full flex items-center justify-between px-4 py-3 text-left text-muted-foreground hover:bg-card/40">
-          <span className="font-mono text-[11px] uppercase tracking-wider">Dev Panel · GET /debug/cache</span>
+          <span className="font-mono text-[11px] uppercase tracking-wider">Diagnostic cache</span>
           <ChevronDown className={cn("h-4 w-4 transition-transform", showCache && "rotate-180")} />
         </button>
         {showCache && (

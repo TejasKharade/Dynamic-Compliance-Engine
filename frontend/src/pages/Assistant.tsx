@@ -59,7 +59,7 @@ export default function Assistant() {
           <Sparkles className="h-4 w-4 text-ai" />
         </div>
         <div className="flex-1">
-          <div className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase">// AI · POST /chat</div>
+          <div className="font-mono text-[10px] tracking-[0.2em] text-muted-foreground uppercase">AI-powered guidance</div>
           <h1 className="text-lg font-semibold flex items-center gap-2 text-foreground">
             Compliance Assistant
             <span className="font-mono text-[9px] tracking-wider text-ai border border-ai/40 px-1.5 rounded-sm bg-ai/5">AI</span>

@@ -49,12 +49,11 @@ export default function RuleIngestion() {
 
       <div className="inline-flex rounded-md border border-border p-0.5 bg-card/50 flex-wrap">
         {([
-          { v: "ingest",   l: "Ingest Rules",      e: "POST /ingest-rules", desc: "Extract & push rules to Neo4j" },
-          { v: "evaluate", l: "Evaluate + Graph",   e: "POST /evaluate",     desc: "Evaluate inventory · syncs Neo4j" },
-        ] as { v: Mode; l: string; e: string; desc: string }[]).map((t) => (
+          { v: "ingest",   l: "Ingest Rules", desc: "Extract & push rules to Neo4j" },
+          { v: "evaluate", l: "Evaluate + Graph", desc: "Evaluate inventory · syncs Neo4j" },
+        ] as { v: Mode; l: string; desc: string }[]).map((t) => (
           <button key={t.v} onClick={() => setMode(t.v)} className={cn("px-3 h-9 rounded text-[12px] font-medium flex flex-col items-start", mode === t.v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
             <span>{t.l}</span>
-            <span className="hidden md:inline font-mono text-[10px] opacity-70">{t.e}</span>
           </button>
         ))}
       </div>

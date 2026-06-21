@@ -4,69 +4,69 @@
 
 @layer base {
   :root {
-    /* ComplianceIQ - dark-only Dell enterprise console */
-    --background: 213 33% 6%;        /* #0A0E14 */
-    --foreground: 210 20% 92%;
+    /* ComplianceIQ - softened dark enterprise console */
+    --background: 220 20% 13%;       /* #1B1F27 */
+    --foreground: 214 24% 94%;
 
-    --card: 215 25% 9%;              /* #11151C */
-    --card-foreground: 210 20% 92%;
+    --card: 220 18% 17%;             /* #242932 */
+    --card-foreground: 214 24% 94%;
 
-    --surface-2: 215 22% 12%;        /* #161B22 */
+    --surface-2: 220 16% 21%;        /* #2D333D */
 
-    --popover: 215 25% 9%;
-    --popover-foreground: 210 20% 92%;
+    --popover: 220 18% 17%;
+    --popover-foreground: 214 24% 94%;
 
-    --primary: 205 100% 40%;         /* Dell blue #0076CE */
+    --primary: 213 88% 62%;          /* clear, softer blue */
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 205 100% 55%;
+    --primary-glow: 213 92% 68%;
 
-    --ai: 180 100% 42%;              /* AI cyan #00D4D4 */
-    --ai-foreground: 213 33% 6%;
+    --ai: 174 67% 50%;               /* balanced teal */
+    --ai-foreground: 220 20% 10%;
 
-    --secondary: 215 22% 14%;
-    --secondary-foreground: 210 20% 92%;
+    --secondary: 220 15% 24%;
+    --secondary-foreground: 214 24% 94%;
 
-    --muted: 215 18% 14%;
-    --muted-foreground: 215 14% 55%;
+    --muted: 220 14% 23%;
+    --muted-foreground: 216 15% 68%;
 
-    --accent: 215 22% 16%;
-    --accent-foreground: 210 20% 92%;
+    --accent: 216 22% 27%;
+    --accent-foreground: 214 24% 96%;
 
-    --destructive: 358 76% 59%;      /* #E5484D */
+    --destructive: 355 75% 63%;
     --destructive-foreground: 0 0% 100%;
 
-    --warning: 35 91% 55%;           /* #F5A623 */
-    --warning-foreground: 213 33% 6%;
+    --warning: 38 92% 59%;
+    --warning-foreground: 220 20% 10%;
 
-    --success: 152 64% 54%;          /* #3DD68C */
-    --success-foreground: 213 33% 6%;
+    --success: 151 58% 55%;
+    --success-foreground: 220 20% 10%;
 
-    --info: 220 9% 46%;              /* #6B7280 */
+    --info: 216 16% 61%;
     --info-foreground: 0 0% 100%;
 
-    --border: 215 20% 18%;
-    --input: 215 20% 18%;
-    --ring: 205 100% 50%;
+    --border: 218 14% 32%;
+    --input: 218 14% 34%;
+    --ring: 213 88% 62%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 215 28% 7%;
-    --sidebar-foreground: 215 14% 65%;
-    --sidebar-primary: 205 100% 40%;
+    --sidebar-background: 222 20% 15%;
+    --sidebar-foreground: 216 15% 72%;
+    --sidebar-primary: 213 88% 62%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 215 22% 12%;
-    --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 215 20% 14%;
-    --sidebar-ring: 205 100% 50%;
+    --sidebar-accent: 220 16% 22%;
+    --sidebar-accent-foreground: 214 24% 96%;
+    --sidebar-border: 218 14% 27%;
+    --sidebar-ring: 213 88% 62%;
 
     --severity-critical: 358 76% 59%;
     --severity-high: 25 95% 58%;
     --severity-medium: 35 91% 55%;
     --severity-low: 152 64% 54%;
 
-    --shadow-glow-primary: 0 0 24px hsl(205 100% 50% / 0.25);
-    --shadow-glow-ai: 0 0 24px hsl(180 100% 42% / 0.2);
-    --shadow-glow-critical: 0 0 20px hsl(358 76% 59% / 0.35);
+    --shadow-glow-primary: 0 0 24px hsl(213 88% 62% / 0.22);
+    --shadow-glow-ai: 0 0 24px hsl(174 67% 50% / 0.18);
+    --shadow-glow-critical: 0 0 20px hsl(355 75% 63% / 0.3);
   }
 
   .light {
@@ -146,13 +146,13 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    font-family: 'Poppins', sans-serif;
     font-size: 14px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     background-image:
-      radial-gradient(ellipse at top, hsl(205 100% 30% / 0.06), transparent 60%),
-      radial-gradient(ellipse at bottom right, hsl(180 100% 30% / 0.04), transparent 50%);
+      radial-gradient(ellipse at top, hsl(213 88% 62% / 0.08), transparent 60%),
+      radial-gradient(ellipse at bottom right, hsl(174 67% 50% / 0.05), transparent 50%);
     background-attachment: fixed;
   }
 
@@ -164,19 +164,27 @@
 
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold tracking-tight text-foreground;
+    font-family: inherit;
   }
 
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: inherit;
+  }
+
+  button, input, textarea, select, option {
+    font: inherit;
   }
 }
 
 @layer components {
   .glass-panel {
-    background-color: hsl(var(--card) / 0.7);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid hsl(var(--border));
+    background-color: hsl(var(--card) / 0.82);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid hsl(var(--border) / 0.9);
+    box-shadow:
+      inset 0 1px 0 hsl(var(--foreground) / 0.035),
+      0 10px 30px hsl(220 30% 4% / 0.12);
   }
   .glow-primary { box-shadow: var(--shadow-glow-primary); }
   .glow-ai { box-shadow: var(--shadow-glow-ai); }
