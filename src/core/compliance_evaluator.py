@@ -498,26 +498,46 @@ def evaluate_inventory(
             tgt_clean = re.sub(r"[\d\.\s>=<!]+", "", str(edge.target_id)).strip()
             if tgt_clean: global_component_vocabulary.add(tgt_clean)
 
-    with Neo4jClient() as db:
-        db.verify_connection()
-        db.clear_graph()
-        db.push_graph(graph)
+    all_unique_installed_entities: set[str] = set()
+    device_cached_indexes: list[tuple[dict[str, Any], set[str]]] = []
 
-        all_unique_installed_entities: set[str] = set()
-        device_cached_indexes: list[tuple[dict[str, Any], set[str]]] = []
+    for device in inventory:
+        entity_ids, _, _ = _build_inventory_indexes(device)
+        all_unique_installed_entities.update(entity_ids)
+        device_cached_indexes.append((device, entity_ids))
 
-        for device in inventory:
-            entity_ids, _, _ = _build_inventory_indexes(device)
-            all_unique_installed_entities.update(entity_ids)
-            device_cached_indexes.append((device, entity_ids))
+    master_relationship_pool = []
+    neo4j_available = False
 
-        master_relationship_pool = db.get_relevant_relationships(sorted(all_unique_installed_entities))
+    try:
+        with Neo4jClient() as db:
+            db.verify_connection()
+            neo4j_available = True
+    except Exception:
+        pass
 
-        for device, entity_ids in device_cached_indexes:
-            local_relationships = [
-                rel for rel in master_relationship_pool
-                if str(rel["source_id"]).strip() in entity_ids or str(rel["target_id"]).strip() in entity_ids
-            ]
+    if neo4j_available:
+        with Neo4jClient() as db:
+            db.clear_graph()
+            db.push_graph(graph)
+            master_relationship_pool = db.get_relevant_relationships(sorted(all_unique_installed_entities))
+    else:
+        # Fallback to in-memory graph relationships
+        for rel in graph.relationships:
+            master_relationship_pool.append({
+                "source_id": rel.source,
+                "target_id": rel.target,
+                "relationship_type": rel.type,
+                "operator": rel.operator if hasattr(rel, 'operator') else "ANY",
+                "min_version": rel.min_version if hasattr(rel, 'min_version') else None,
+                "target_type": "Component"
+            })
+
+    for device, entity_ids in device_cached_indexes:
+        local_relationships = [
+            rel for rel in master_relationship_pool
+            if str(rel["source_id"]).strip() in entity_ids or str(rel["target_id"]).strip() in entity_ids
+        ]
             reports.append(evaluate_device(local_relationships, device, global_component_vocabulary))
 
     return reports
