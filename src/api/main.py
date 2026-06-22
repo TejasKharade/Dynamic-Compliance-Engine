@@ -40,8 +40,9 @@ from src.agent.report_store import (
 from src.ingestion.file_parsers import parse_inventory_file
 from src.ingestion.normalizer import InventoryNormalizer
 
-# --------------- Vocabulary Cache ---------------
+# --------------- Globals Cache ---------------
 _vocabulary_cache: set[str] | None = None
+_global_graph: ComplianceGraphDocument | None = None
 
 def _get_vocabulary() -> set[str]:
     global _vocabulary_cache
@@ -594,6 +595,9 @@ def evaluate_from_files(
     finally:
         rules_path.unlink(missing_ok=True)
 
+    global _global_graph
+    _global_graph = graph
+
     raw_inventory = _load_inventory_json_from_upload(inventory_file)
     vocab = {node.id for node in graph.nodes}
     inventory = InventoryNormalizer().normalize(raw_inventory, vocab)
@@ -694,6 +698,9 @@ def ingest_rules_only(rules_file: UploadFile = File(...)):
     finally:
         rules_path.unlink(missing_ok=True)
 
+    global _global_graph
+    _global_graph = graph
+
     try:
         with Neo4jClient() as db:
             db.verify_connection()
@@ -708,10 +715,8 @@ def ingest_rules_only(rules_file: UploadFile = File(...)):
             }
             db.save_metadata(metadata)
             clear_vocabulary_cache()
-            
-            
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        print(f"Bypassing Neo4j due to error: {exc}")
 
     # Build frontend-friendly rule list from the graph relationships
     rules_out: list[ExtractedRuleOut] = []
@@ -768,7 +773,12 @@ def get_graph_network():
             db.verify_connection()
             return db.get_graph_network()
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        global _global_graph
+        if _global_graph:
+            nodes = [{"id": n.id, "type": n.type, "name": n.id, "label": n.type} for n in _global_graph.nodes]
+            edges = [{"source": r.source, "target": r.target, "relationship_type": r.type, "label": r.type, "operator": getattr(r, 'operator', ''), "min_version": getattr(r, 'min_version', '')} for r in _global_graph.relationships]
+            return {"nodes": nodes, "edges": edges}
+        return {"nodes": [], "edges": []}
 
 
 @app.get("/impact")
